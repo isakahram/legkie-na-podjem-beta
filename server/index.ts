@@ -82,10 +82,12 @@ app.post('/api/sessions', (request, response) => {
   if (!db.getChild(payload.childId)) return response.status(404).json({ error: 'Профиль не найден' });
   const session = db.insertSession(payload);
   // Demo controls are useful for previewing but must not grant rewards or affect summaries.
-  const balance =
-    payload.inputMode === 'microphone'
-      ? db.rewardSession(payload.childId, payload.coinsCollected)
-      : db.getChild(payload.childId)!.balance;
+  let balance = db.getChild(payload.childId)!.balance;
+  if (payload.inputMode === 'microphone') {
+    balance = db.rewardSession(payload.childId, payload.coinsCollected);
+    // Честная автовыдача скинов-эффектов: только по-настоящему достигнутый прогресс.
+    db.grantProgressSkins(payload.childId);
+  }
   return response.status(201).json({ session, balance });
 });
 

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { addDays, setHours, startOfWeek, subWeeks } from 'date-fns';
+import { addDays, differenceInCalendarDays, parseISO, setHours, startOfWeek, subWeeks } from 'date-fns';
 import { SKIN_CATALOG } from '../src/skins/catalog.ts';
 import type {
   CalibrationProfile,
@@ -278,6 +278,7 @@ export class AppDatabase {
           }
         });
       });
+      children.forEach((child) => this.grantProgressSkins(child[0]));
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -429,6 +430,74 @@ export class AppDatabase {
   rewardSession(childId: string, coins: number): number {
     this.db.prepare('UPDATE children SET balance = balance + ? WHERE id = ?').run(coins, childId);
     return this.getChild(childId)?.balance ?? 0;
+  }
+
+  /**
+   * Честный прогресс для скинов-эффектов: streak дней подряд с занятием,
+   * НАКОПЛЕННОЕ число ровных выдохов по всем занятиям, число завершённых занятий.
+   * Считается только по «честным» сессиям (микрофон, статус completed) —
+   * демо-режим не должен приближать разблокировку, как и монеты.
+   *
+   * Выдохи считаются суммарно (а не за одно занятие): схема `/api/sessions`
+   * ограничивает `completedBreaths` максимумом 20 за одно занятие, поэтому
+   * порог «30 ровных выдохов» за один заход был бы физически недостижим —
+   * это была бы ложная цель. Накопительный счётчик даёт то же самое честное
+   * достижение за несколько обычных занятий.
+   */
+  private computeProgress(childId: string): { streakDays: number; totalBreaths: number; completedSessions: number } {
+    const rows = this.db
+      .prepare(
+        `SELECT started_at, completed_cycles FROM sessions
+         WHERE child_id = ? AND status = 'completed' AND input_mode = 'microphone'
+         ORDER BY started_at DESC`,
+      )
+      .all(childId) as Array<{ started_at: string; completed_cycles: number }>;
+
+    const completedSessions = rows.length;
+    const totalBreaths = rows.reduce((sum, row) => sum + row.completed_cycles, 0);
+
+    const uniqueDays = Array.from(new Set(rows.map((row) => row.started_at.slice(0, 10))))
+      .map((day) => parseISO(day))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    let streakDays = 0;
+    if (uniqueDays.length > 0 && differenceInCalendarDays(new Date(), uniqueDays[0]) <= 1) {
+      streakDays = 1;
+      for (let index = 1; index < uniqueDays.length; index += 1) {
+        if (differenceInCalendarDays(uniqueDays[index - 1], uniqueDays[index]) === 1) {
+          streakDays += 1;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return { streakDays, totalBreaths, completedSessions };
+  }
+
+  /**
+   * Автоматически выдаёт скины-эффекты, если ребёнок реально достиг условия.
+   * Ничего не выдаёт заранее и не показывает «обещание» — карточка в магазине
+   * остаётся заблокированной, пока это не будет вызвано с настоящим прогрессом.
+   */
+  grantProgressSkins(childId: string): void {
+    const progress = this.computeProgress(childId);
+    const owned = new Set(
+      (this.db.prepare('SELECT skin_id FROM child_skins WHERE child_id = ?').all(childId) as Array<{ skin_id: string }>).map(
+        (row) => row.skin_id,
+      ),
+    );
+    const progressByUnlock: Record<string, number> = {
+      streak: progress.streakDays,
+      breaths: progress.totalBreaths,
+      sessions: progress.completedSessions,
+    };
+    SKIN_CATALOG.forEach((skin) => {
+      if (!skin.unlock || skin.unlockTarget === undefined || owned.has(skin.id)) return;
+      if ((progressByUnlock[skin.unlock] ?? 0) >= skin.unlockTarget) {
+        this.db.prepare('INSERT OR IGNORE INTO child_skins (child_id, skin_id) VALUES (?, ?)').run(childId, skin.id);
+      }
+    });
   }
 
   listSessions(childId?: string): SessionRecord[] {
