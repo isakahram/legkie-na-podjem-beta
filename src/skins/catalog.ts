@@ -11,8 +11,16 @@ export interface SkinDefinition {
   pattern?: 'stripes' | 'dots' | 'clouds' | 'stars' | 'waves' | 'rainbow';
   effect?: 'glow' | 'sparkles' | 'iridescent';
   unlock?: SkinUnlock;
+  /** Порог прогресса для `unlock` (дни, выдохи за сессию, занятия). Используется сервером для честной автовыдачи. */
+  unlockTarget?: number;
   unlockLabel?: string;
 }
+
+export const CATEGORY_TITLES: Record<SkinCategory, string> = {
+  color: 'Цвета',
+  pattern: 'Узоры',
+  effect: 'Эффекты',
+};
 
 export const SKIN_CATALOG: readonly SkinDefinition[] = [
   { id: 'berry', name: 'Ягодка', category: 'color', price: 0, color: '#f45d7a', accent: '#862d54' },
@@ -29,9 +37,42 @@ export const SKIN_CATALOG: readonly SkinDefinition[] = [
   { id: 'stars', name: 'Звёздочки', category: 'pattern', price: 80, color: '#7064d8', accent: '#29235f', pattern: 'stars' },
   { id: 'waves', name: 'Волны', category: 'pattern', price: 80, color: '#54c7b8', accent: '#1c6871', pattern: 'waves' },
   { id: 'rainbow', name: 'Радуга', category: 'pattern', price: 120, color: '#f39a75', accent: '#754b88', pattern: 'rainbow' },
-  { id: 'glow', name: 'Сияние', category: 'effect', price: 0, color: '#f7c8ff', accent: '#924eb0', effect: 'glow', unlock: 'streak', unlockLabel: '7 дней подряд' },
-  { id: 'sparkles', name: 'Искры', category: 'effect', price: 0, color: '#ffe28a', accent: '#b27620', effect: 'sparkles', unlock: 'breaths', unlockLabel: '30 ровных выдохов за сессию' },
-  { id: 'iridescent', name: 'Переливание', category: 'effect', price: 0, color: '#9ee7e1', accent: '#3d63a7', effect: 'iridescent', unlock: 'sessions', unlockLabel: '10 завершённых занятий' },
+  {
+    id: 'glow',
+    name: 'Сияние',
+    category: 'effect',
+    price: 0,
+    color: '#f7c8ff',
+    accent: '#924eb0',
+    effect: 'glow',
+    unlock: 'streak',
+    unlockTarget: 7,
+    unlockLabel: '7 дней подряд',
+  },
+  {
+    id: 'sparkles',
+    name: 'Искры',
+    category: 'effect',
+    price: 0,
+    color: '#ffe28a',
+    accent: '#b27620',
+    effect: 'sparkles',
+    unlock: 'breaths',
+    unlockTarget: 30,
+    unlockLabel: '30 ровных выдохов',
+  },
+  {
+    id: 'iridescent',
+    name: 'Переливание',
+    category: 'effect',
+    price: 0,
+    color: '#9ee7e1',
+    accent: '#3d63a7',
+    effect: 'iridescent',
+    unlock: 'sessions',
+    unlockTarget: 10,
+    unlockLabel: '10 занятий',
+  },
 ];
 
 export const skinDefinition = (id: string): SkinDefinition =>

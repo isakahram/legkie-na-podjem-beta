@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
-import type { Skin } from '../types';
 import { skinDefinition } from '../skins/catalog';
 
-interface BalloonProps { skin?: Skin; className?: string; style?: CSSProperties; expression?: 'normal' | 'happy' | 'blush' | 'closed' | 'focused' | 'surprised'; }
+/** Шарику достаточно знать id скина — остальные визуальные детали берутся из каталога. */
+interface BalloonSkin { id: string; }
+
+interface BalloonProps { skin?: BalloonSkin; className?: string; style?: CSSProperties; expression?: 'normal' | 'happy' | 'blush' | 'closed' | 'focused' | 'surprised'; }
 
 export function Balloon({ skin, className = '', style, expression = 'happy' }: BalloonProps) {
   const definition = skinDefinition(skin?.id ?? 'berry');
@@ -23,12 +25,12 @@ export function Balloon({ skin, className = '', style, expression = 'happy' }: B
         </pattern>
         <filter id={`glow-${definition.id}`}><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
       </defs>
-      {definition.effect === 'glow' && <ellipse cx="63" cy="68" rx="55" ry="67" fill={definition.color} opacity=".38" filter={`url(#glow-${definition.id})`} />}
+      {definition.effect === 'glow' && <ellipse className="balloon__glow" cx="63" cy="68" rx="55" ry="67" fill={definition.color} opacity=".38" filter={`url(#glow-${definition.id})`} />}
       <path d="M63 5C29 5 8 25 8 62c0 30 19 58 45 70l10 6 10-6c26-12 45-40 45-70C118 25 97 5 63 5Z" fill={`url(#body-${definition.id})`} />
       {definition.pattern && <path d="M63 5C29 5 8 25 8 62c0 30 19 58 45 70l10 6 10-6c26-12 45-40 45-70C118 25 97 5 63 5Z" fill={`url(#${patternId})`} />}
       <ellipse cx="63" cy="57" rx="53" ry="55" fill={`url(#shine-${definition.id})`} />
-      {definition.effect === 'iridescent' && <path d="M15 58Q63 15 111 58Q99 119 63 136Q27 119 15 58Z" fill={`url(#${patternId})`} opacity=".25" />}
-      {definition.effect === 'sparkles' && <g fill="#fff"><path d="M20 33l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" /><path d="M106 43l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /><path d="M96 94l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" /></g>}
+      {definition.effect === 'iridescent' && <path className="balloon__iridescent" d="M15 58Q63 15 111 58Q99 119 63 136Q27 119 15 58Z" fill={`url(#${patternId})`} opacity=".32" />}
+      {definition.effect === 'sparkles' && <g fill="#fff"><path className="balloon__spark" d="M20 33l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" /><path className="balloon__spark balloon__spark--b" d="M106 43l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /><path className="balloon__spark balloon__spark--c" d="M96 94l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" /></g>}
       <g fill={definition.accent}>
         {face === 'closed' ? <><path d="M35 69q6 6 12 0" fill="none" stroke={definition.accent} strokeWidth="3" /><path d="M79 69q6 6 12 0" fill="none" stroke={definition.accent} strokeWidth="3" /></> : <><ellipse cx="42" cy="68" rx="4" ry={face === 'focused' ? 6 : 5} /><ellipse cx="84" cy="68" rx="4" ry={face === 'focused' ? 6 : 5} /></>}
         {face === 'focused' ? <circle cx="63" cy="82" r="6" fill="none" stroke={definition.accent} strokeWidth="3" /> : <path d="M52 83q11 11 22 0" fill="none" stroke={definition.accent} strokeWidth="3" strokeLinecap="round" />}
