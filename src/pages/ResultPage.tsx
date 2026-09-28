@@ -11,8 +11,9 @@ export function ResultPage() {
   if (!lastSession) return <Navigate to="/child/home" replace />;
 
   const activeSkin = child.skins.find((skin) => skin.id === child.selectedSkin);
-  const breaths = lastSession.completedCycles;
-  const bestDuration = lastSession.averageBreathDuration;
+  const breaths = lastSession.completedBreaths ?? lastSession.completedCycles ?? 0;
+  const targetBreaths = lastSession.targetBreaths ?? lastSession.targetCycles ?? child.assignment.targetBreaths ?? 8;
+  const bestDuration = lastSession.bestDuration ?? lastSession.averageBreathDuration;
   const stability = lastSession.averageStability;
   const minutes = Math.round(lastSession.durationSeconds / 60);
   const locked = child.skins.filter((skin) => !skin.owned).sort((a, b) => a.price - b.price);
@@ -40,7 +41,7 @@ export function ResultPage() {
 
           <div className="result-score">
             <div><Coins /><span><small>Монет</small><b>{lastSession.coinsCollected}</b></span></div>
-            <div><Wind /><span><small>Ровных выдохов</small><b>{breaths}</b></span></div>
+            <div className="result-score__hero"><Wind /><span><small>Глубокие выдохи</small><b>{breaths} / {targetBreaths}</b></span></div>
             <div>
               <Timer />
               <span>
@@ -52,12 +53,12 @@ export function ResultPage() {
               <Gauge />
               <span>
                 <small>Ровность дыхания</small>
-                <b>{stability === null ? '—' : stability}</b>
+                <b>{stability === null ? '—' : `${stability} / 100`}</b>
               </span>
             </div>
           </div>
 
-          <div className="goal-progress">
+          <div className="goal-progress result-time-note">
             <div><span>Время в небе</span><b>{minutes} мин</b></div>
             <i><em style={{ width: '100%' }} /></i>
           </div>

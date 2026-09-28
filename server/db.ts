@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { addDays, setHours, startOfWeek, subWeeks } from 'date-fns';
+import { SKIN_CATALOG } from '../src/skins/catalog.ts';
 import type {
   CalibrationProfile,
   ChildProfile,
@@ -32,6 +33,7 @@ interface SessionRow {
   breath_count: number;
   average_strength: number;
   average_breath_duration: number | null;
+  best_duration_seconds: number | null;
   correct_breath_percent: number;
   completed_cycles: number;
   target_cycles: number;
@@ -62,6 +64,7 @@ const SESSIONS_TABLE_SQL = `
     breath_count INTEGER NOT NULL,
     average_strength REAL NOT NULL,
     average_breath_duration REAL,
+    best_duration_seconds REAL,
     average_stability REAL,
     correct_breath_percent REAL NOT NULL,
     completed_cycles INTEGER NOT NULL,
@@ -79,7 +82,7 @@ const SESSIONS_TABLE_SQL = `
 /** Поля сессии, читаемые из БД. SELECT * не используется намеренно. */
 const SESSION_FIELDS = [
   's.id', 's.child_id', 's.started_at', 's.duration_seconds', 's.breath_count',
-  's.average_strength', 's.average_breath_duration', 's.average_stability',
+  's.average_strength', 's.average_breath_duration', 's.best_duration_seconds', 's.average_stability',
   's.correct_breath_percent', 's.completed_cycles', 's.target_cycles',
   's.coins_collected', 's.average_latency_ms', 's.max_latency_ms',
   's.suspicious_events', 's.status', 's.input_mode',
@@ -161,7 +164,12 @@ export class AppDatabase {
    */
   private migrateSessions(): void {
     const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>;
-    if (columns.length === 0 || columns.some((column) => column.name === 'average_stability')) return;
+    if (columns.length === 0) return;
+    if (columns.some((column) => column.name === 'average_stability') && !columns.some((column) => column.name === 'best_duration_seconds')) {
+      this.db.exec('ALTER TABLE sessions ADD COLUMN best_duration_seconds REAL');
+      return;
+    }
+    if (columns.some((column) => column.name === 'average_stability')) return;
     this.db.exec('BEGIN');
     try {
       this.db.exec('ALTER TABLE sessions RENAME TO sessions_legacy;');
@@ -169,10 +177,10 @@ export class AppDatabase {
       this.db.exec(`
         INSERT INTO sessions
           (id, child_id, started_at, duration_seconds, breath_count, average_strength,
-           average_breath_duration, correct_breath_percent, completed_cycles, target_cycles,
+           average_breath_duration, best_duration_seconds, correct_breath_percent, completed_cycles, target_cycles,
            coins_collected, obstacles_avoided, suspicious_events, status, input_mode)
         SELECT id, child_id, started_at, duration_seconds, breath_count, average_strength,
-           average_breath_duration, correct_breath_percent, completed_cycles, target_cycles,
+           average_breath_duration, NULL, correct_breath_percent, completed_cycles, target_cycles,
            coins_collected, obstacles_avoided, suspicious_events, status, input_mode
         FROM sessions_legacy;
       `);
@@ -188,6 +196,10 @@ export class AppDatabase {
   }
 
   private seed(): void {
+    const catalogStatement = this.db.prepare(
+      'INSERT OR IGNORE INTO skins (id, name, color, accent, price) VALUES (?, ?, ?, ?, ?)',
+    );
+    SKIN_CATALOG.forEach((skin) => catalogStatement.run(skin.id, skin.name, skin.color, skin.accent, skin.price));
     const count = this.db.prepare('SELECT COUNT(*) AS count FROM children').get() as { count: number };
     if (count.count > 0) return;
 
@@ -197,21 +209,17 @@ export class AppDatabase {
         'clinician-demo',
         'Анна Викторовна',
       );
-      const skins = [
-        ['berry', 'Ягодка', '#ff6b8b', '#8f3156', 0],
-        ['sunny', 'Солнышко', '#ffbf3f', '#ed6c35', 12],
-        ['ocean', 'Океан', '#4ecdc4', '#247aa0', 18],
-        ['space', 'Космос', '#6c63d9', '#332879', 25],
-      ] as const;
+      const skins = SKIN_CATALOG.map((skin) => [skin.id, skin.name, skin.color, skin.accent, skin.price] as const);
       const skinStatement = this.db.prepare(
-        'INSERT INTO skins (id, name, color, accent, price) VALUES (?, ?, ?, ?, ?)',
+        'INSERT OR IGNORE INTO skins (id, name, color, accent, price) VALUES (?, ?, ?, ?, ?)',
       );
       skins.forEach((skin) => skinStatement.run(...skin));
 
       const children = [
-        ['child-luna', 'ВЕТЕР7', 'Миша К.', 7, 'МК', 28, 'berry', 3, 8, 60],
-        ['child-star', 'ЗВЕЗДА', 'Соня П.', 9, 'СП', 41, 'ocean', 4, 10, 75],
-        ['child-rain', 'РАДУГА', 'Лёва М.', 6, 'ЛМ', 16, 'sunny', 3, 7, 55],
+        ['child-luna', 'ВЕТЕР7', 'Миша К.', 7, 'МК', 28, 'berry', 3, 8, 600],
+        ['child-star', 'ЗВЕЗДА', 'Соня П.', 9, 'СП', 41, 'ocean', 4, 6, 600],
+        ['child-rain', 'РАДУГА', 'Лёва М.', 6, 'ЛМ', 16, 'sunny', 3, 10, 600],
+        ['child-cloud', 'ОБЛАКО', 'Новый участник', 7, 'ОБ', 0, 'berry', 3, 8, 600],
       ] as const;
       const childStatement = this.db.prepare(
         `INSERT INTO children
@@ -237,6 +245,7 @@ export class AppDatabase {
         [3, 2, 3, 3, 1, 3, 4, 1],
         [3, 4, 4, 3, 4, 4, 3, 1],
         [1, 2, 2, 3, 2, 3, 3, 1],
+        [0, 0, 0, 0, 0, 0, 0, 0],
       ];
       children.forEach((child, childIndex) => {
         patterns[childIndex].forEach((amount, patternIndex) => {
@@ -306,6 +315,7 @@ export class AppDatabase {
       selectedSkin: row.selected_skin,
       assignment: {
         sessionsPerWeek: row.sessions_per_week,
+        targetBreaths: row.cycles_per_session,
         cyclesPerSession: row.cycles_per_session,
         recommendedDurationSeconds: row.recommended_duration_seconds,
       },
@@ -389,10 +399,10 @@ export class AppDatabase {
     this.db.prepare(
       `INSERT INTO sessions
        (id, child_id, started_at, duration_seconds, breath_count, average_strength,
-        average_breath_duration, average_stability, correct_breath_percent, completed_cycles,
+        average_breath_duration, best_duration_seconds, average_stability, correct_breath_percent, completed_cycles,
         target_cycles, coins_collected, average_latency_ms, max_latency_ms,
         suspicious_events, status, input_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       payload.childId,
@@ -401,10 +411,11 @@ export class AppDatabase {
       payload.breathCount,
       payload.averageStrength,
       payload.averageBreathDuration,
+      payload.bestDuration ?? null,
       payload.averageStability,
       payload.correctBreathPercent,
-      payload.completedCycles,
-      payload.targetCycles,
+      payload.completedBreaths ?? payload.completedCycles ?? 0,
+      payload.targetBreaths ?? payload.targetCycles ?? 8,
       payload.coinsCollected,
       payload.averageLatencyMs,
       payload.maxLatencyMs,
@@ -412,7 +423,7 @@ export class AppDatabase {
       payload.status,
       payload.inputMode,
     );
-    return { id, ...payload };
+    return { ...payload, id, completedBreaths: payload.completedBreaths ?? payload.completedCycles ?? 0, targetBreaths: payload.targetBreaths ?? payload.targetCycles ?? 8, completedCycles: payload.completedBreaths ?? payload.completedCycles ?? 0, targetCycles: payload.targetBreaths ?? payload.targetCycles ?? 8 };
   }
 
   rewardSession(childId: string, coins: number): number {
@@ -445,8 +456,11 @@ export class AppDatabase {
       averageStrength: row.average_strength,
       // Старые записи не содержат новых метрик: возвращаем null, а не 0.
       averageBreathDuration: row.average_breath_duration ?? null,
+      bestDuration: row.best_duration_seconds ?? null,
       averageStability: row.average_stability ?? null,
       correctBreathPercent: row.correct_breath_percent,
+      completedBreaths: row.completed_cycles,
+      targetBreaths: row.target_cycles,
       completedCycles: row.completed_cycles,
       targetCycles: row.target_cycles,
       coinsCollected: row.coins_collected,
@@ -464,6 +478,7 @@ export class AppDatabase {
     const skin = child.skins.find((item) => item.id === skinId);
     if (!skin) throw new Error('Скин не найден');
     if (skin.owned) return child;
+    if (skin.category === 'effect' || skin.price === 0) throw new Error('открывается за серию занятий, а не за монеты');
     if (child.balance < skin.price) throw new Error('Пока не хватает монет');
     this.db.exec('BEGIN');
     try {

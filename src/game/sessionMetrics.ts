@@ -9,6 +9,7 @@
 
 export interface SessionMetrics {
   averageBreathDuration: number | null;
+  bestDuration: number | null;
   averageStability: number | null;
   completedBreaths: number;
   sessionDurationSeconds: number;
@@ -186,8 +187,13 @@ export class SessionMetricsCollector {
   snapshot(): SessionMetrics {
     const averageLatency = average(this.latencies);
     return {
-      averageBreathDuration: average(this.durations),
-      averageStability: average(this.stabilities),
+      bestDuration: this.durations.length === 0 ? null : Math.round(Math.max(...this.durations) * 10) / 10,
+      averageBreathDuration: average(this.durations) === null
+        ? null
+        : Math.round(average(this.durations)! * 10) / 10,
+      averageStability: average(this.stabilities) === null
+        ? null
+        : Math.min(100, Math.max(0, Math.round(average(this.stabilities)!))),
       completedBreaths: this.durations.length,
       sessionDurationSeconds: Math.round(this.elapsedSeconds),
       coinsCollected: this.coins,

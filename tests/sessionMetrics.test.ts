@@ -124,6 +124,7 @@ describe('агрегаты сессии', () => {
     const metrics = new SessionMetricsCollector().finish();
     expect(metrics).toEqual({
       averageBreathDuration: null,
+      bestDuration: null,
       averageStability: null,
       completedBreaths: 0,
       sessionDurationSeconds: 0,

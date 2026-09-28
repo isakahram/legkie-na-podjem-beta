@@ -36,6 +36,7 @@ export function calculatePatientAnalytics(
   assignment: Assignment,
   now = new Date(),
 ): { summary: PatientSummary; weekly: WeeklyPoint[] } {
+  const targetBreaths = assignment.targetBreaths ?? assignment.cyclesPerSession ?? 8;
   const eligible = sessions.filter(
     (session) => session.status === 'completed' && session.inputMode === 'microphone',
   );
@@ -61,8 +62,10 @@ export function calculatePatientAnalytics(
       averageCorrect: round(average(inWeek.map((session) => session.correctBreathPercent))),
       averageDuration: round(average(inWeek.map((session) => session.durationSeconds))),
       averageStability: averageOrNull(inWeek.map((session) => session.averageStability)),
-      cycles: inWeek.reduce((sum, session) => sum + session.completedCycles, 0),
-      targetCycles: assignment.cyclesPerSession * assignment.sessionsPerWeek,
+      breaths: inWeek.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0),
+      targetBreaths: targetBreaths * assignment.sessionsPerWeek,
+      cycles: inWeek.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0),
+      targetCycles: targetBreaths * assignment.sessionsPerWeek,
     };
   });
 
@@ -71,8 +74,8 @@ export function calculatePatientAnalytics(
   const lastSession = [...eligible].sort(
     (a, b) => parseISO(b.startedAt).getTime() - parseISO(a.startedAt).getTime(),
   )[0];
-  const totalCompletedCycles = eligible.reduce((sum, session) => sum + session.completedCycles, 0);
-  const totalTargetCycles = eligible.reduce((sum, session) => sum + session.targetCycles, 0);
+  const totalCompletedCycles = eligible.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0);
+  const totalTargetCycles = eligible.reduce((sum, session) => sum + (session.targetBreaths ?? session.targetCycles ?? targetBreaths), 0);
 
   return {
     summary: {
@@ -83,8 +86,9 @@ export function calculatePatientAnalytics(
       averageBreathDuration: averageOrNull(eligible.map((session) => session.averageBreathDuration), 1),
       averageStability: averageOrNull(eligible.map((session) => session.averageStability)),
       averageSessionDuration: round(average(eligible.map((session) => session.durationSeconds))),
-      cycleCompletionPercent:
+      breathCompletionPercent:
         totalTargetCycles === 0 ? 0 : Math.min(100, round((totalCompletedCycles / totalTargetCycles) * 100)),
+      cycleCompletionPercent: totalTargetCycles === 0 ? 0 : Math.min(100, round((totalCompletedCycles / totalTargetCycles) * 100)),
       missedThisWeek: Math.max(0, assignment.sessionsPerWeek - thisWeek.length),
       lastSessionAt: lastSession?.startedAt ?? null,
       trendPercent: previous === 0 ? 0 : round(((current - previous) / previous) * 100),

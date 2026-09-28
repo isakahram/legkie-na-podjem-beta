@@ -23,11 +23,9 @@ import type { CalibrationProfile } from '../types';
 
 type GamePhase = 'ready' | 'running' | 'saving' | 'saveError';
 
-/** Сессия длится 5–10 минут: назначение специалиста приводится к этим границам. */
-const SESSION_MIN_SECONDS = 300;
-const SESSION_MAX_SECONDS = 600;
-export const sessionLengthSeconds = (recommended: number): number =>
-  Math.min(SESSION_MAX_SECONDS, Math.max(SESSION_MIN_SECONDS, Math.round(recommended)));
+/** Время только страховка: основная цель — количество завершённых выдохов. */
+export const SESSION_MAX_SECONDS = 600;
+export const sessionLengthSeconds = (_recommended: number): number => SESSION_MAX_SECONDS;
 
 /** Сколько секунд посторонний звук должен держаться, чтобы включить паузу. */
 const PAUSE_ENTER_SECONDS = 1.2;
@@ -47,7 +45,8 @@ export function GamePage() {
   const gameRef = useRef<GameState>(initialGameState());
   const [backdrop, setBackdrop] = useState<Cloud[]>([]);
   const backdropRef = useRef<Cloud[]>([]);
-  const totalSeconds = sessionLengthSeconds(child?.assignment.recommendedDurationSeconds ?? 300);
+  const targetBreaths = child?.assignment.targetBreaths ?? child?.assignment.cyclesPerSession ?? 8;
+  const totalSeconds = sessionLengthSeconds(child?.assignment.recommendedDurationSeconds ?? 600);
   const [timeLeft, setTimeLeft] = useState(totalSeconds);
   const [strength, setStrength] = useState(0);
   const [breathing, setBreathing] = useState(false);
@@ -192,12 +191,13 @@ export function GamePage() {
       breathCount: breathSegments.current,
       averageStrength: breathFrames.current ? strengthSum.current / breathFrames.current : 0,
       averageBreathDuration: summary.averageBreathDuration,
+      bestDuration: summary.bestDuration,
       averageStability: summary.averageStability,
       correctBreathPercent: activeFrames.current
         ? Math.min(100, (breathFrames.current / activeFrames.current) * 100)
         : 0,
-      completedCycles: summary.completedBreaths,
-      targetCycles: child.assignment.cyclesPerSession,
+      completedBreaths: summary.completedBreaths,
+      targetBreaths,
       coinsCollected: summary.coinsCollected,
       averageLatencyMs: summary.averageLatencyMs,
       maxLatencyMs: summary.maxLatencyMs,
@@ -216,7 +216,7 @@ export function GamePage() {
       setError(caught instanceof Error ? caught.message : 'Не удалось сохранить результат');
       setPhase('saveError');
     }
-  }, [child, inputMode, navigate, refreshChild, setLastSession]);
+  }, [child, inputMode, navigate, refreshChild, setLastSession, targetBreaths]);
 
   useEffect(() => {
     if (phase !== 'running' || !child) return;
@@ -270,12 +270,13 @@ export function GamePage() {
 
       const remaining = Math.max(0, totalSeconds - elapsed.current);
       setTimeLeft(Math.ceil(remaining));
-      if (remaining <= 0) void finishGame();
+      const completed = metrics.current.snapshot().completedBreaths;
+      if (completed >= targetBreaths || remaining <= 0) void finishGame();
       else animationFrame = requestAnimationFrame(loop);
     };
     animationFrame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrame);
-  }, [child, finishGame, handleAudioFrame, inputMode, phase, totalSeconds]);
+  }, [child, finishGame, handleAudioFrame, inputMode, phase, targetBreaths, totalSeconds]);
 
   useEffect(() => {
     if (inputMode !== 'demo') return;
@@ -305,6 +306,7 @@ export function GamePage() {
 
         <div className="game-hud">
           <span className="coin-pill"><Coins /> {game.coinsCollected}</span>
+          <strong className="breath-progress">Выдохи: {metrics.current.snapshot().completedBreaths} / {targetBreaths}</strong>
           <span className="timer timer--soft" title="Время занятия">
             {minutes}:{String(seconds).padStart(2, '0')}
           </span>
