@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="56" y1="28" x2="456" y2="484" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7469e5"/><stop offset="1" stop-color="#4438ad"/>
+    </linearGradient>
+    <linearGradient id="balloon" x1="165" y1="120" x2="333" y2="344" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff91aa"/><stop offset="1" stop-color="#ef5479"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M66 125c52-25 99-11 130 2M47 174c59-22 104-10 135 3" fill="none" stroke="#fff" stroke-opacity=".62" stroke-width="17" stroke-linecap="round"/>
+  <path d="M342 379c44 17 83 12 118-3M363 424c33 8 61 5 86-5" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width="15" stroke-linecap="round"/>
+  <path d="M337 235c0 76-56 127-81 127s-81-51-81-127c0-68 36-111 81-111s81 43 81 111Z" fill="url(#balloon)"/>
+  <ellipse cx="221" cy="178" rx="17" ry="30" fill="#fff" fill-opacity=".36" transform="rotate(22 221 178)"/>
+  <ellipse cx="224" cy="256" rx="7" ry="10" fill="#71304e"/><ellipse cx="288" cy="256" rx="7" ry="10" fill="#71304e"/>
+  <path d="M239 278c10 12 24 12 34 0" fill="none" stroke="#71304e" stroke-width="8" stroke-linecap="round"/>
+  <path d="m256 359 15 28h-30l15-28Z" fill="#9d3659"/>
+  <path d="M256 386c-12 33 26 42 1 76" fill="none" stroke="#fff" stroke-opacity=".72" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="393" cy="111" r="29" fill="#ffc654" stroke="#ffe9a4" stroke-width="8"/><path d="m393 94 5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1 5-11Z" fill="#fff7bb"/>
+</svg>
