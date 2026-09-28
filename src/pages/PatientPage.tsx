@@ -1,4 +1,4 @@
-import { Activity, AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Download, Info, Search, Target, TrendingDown, TrendingUp, Wind } from 'lucide-react';
+import { Activity, ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Download, Info, Search, Target, TrendingDown, TrendingUp, Wind } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
@@ -40,7 +40,7 @@ export function PatientPage() {
         <section className="patient-kpis">
           <Metric icon={<CalendarDays />} label="Регулярность" value={`${child.summary.sessionsThisWeek}/${child.summary.targetSessions}`} note={child.summary.missedThisWeek ? `Осталось ${child.summary.missedThisWeek}` : 'План выполнен'} good={!child.summary.missedThisWeek} />
           <Metric icon={<CheckCircle2 />} label="Правильность" value={`${child.summary.averageCorrectPercent}%`} note={`${child.summary.trendPercent >= 0 ? '+' : ''}${child.summary.trendPercent}% к прошлой неделе`} good={child.summary.trendPercent >= 0} />
-          <Metric icon={<Wind />} label="Средний выдох" value={`${child.summary.averageBreathDuration} c`} note="по завершённым циклам" good />
+          <Metric icon={<Wind />} label="Средний выдох" value={child.summary.averageBreathDuration === null ? '—' : `${child.summary.averageBreathDuration} c`} note="по завершённым циклам" good />
           <Metric icon={<Target />} label="Выполнение циклов" value={`${child.summary.cycleCompletionPercent}%`} note="за весь период" good={child.summary.cycleCompletionPercent >= 75} />
         </section>
         <section className="patient-charts">
@@ -57,11 +57,11 @@ export function PatientPage() {
             <label className="select-field"><select value={mode} onChange={(event) => setMode(event.target.value as Mode)}><option value="all">Все режимы</option><option value="microphone">Микрофон</option><option value="demo">Демо</option></select><ChevronDown /></label>
             <button className="button button--outline button--small" onClick={() => exportCsv(filtered, child.nickname)}><Download /> CSV</button>
           </div></div>
-          <div className="patient-table-wrap"><table className="session-table"><thead><tr><th>Дата и время</th><th>Длительность</th><th>Выдохи</th><th>Ср. выдох</th><th>Правильность</th><th>Циклы</th><th>Монеты</th><th>Проверка</th></tr></thead><tbody>
-            {filtered.map((session) => <tr key={session.id}><td><b>{formatDate(session.startedAt)}</b><small>{formatTime(session.startedAt)} {session.inputMode === 'demo' && <em>демо</em>}</small></td><td>{formatDuration(session.durationSeconds)}</td><td>{session.breathCount}</td><td>{session.averageBreathDuration.toFixed(1)} с</td><td><span className={`quality-value ${session.correctBreathPercent >= 80 ? 'quality-value--good' : 'quality-value--warn'}`}>{Math.round(session.correctBreathPercent)}%</span></td><td>{session.completedCycles}/{session.targetCycles}</td><td>{session.coinsCollected}</td><td>{session.suspiciousEvents ? <span className="flag-pill" title="Звуковой профиль отличался от калибровочного выдоха. Возможна ложная реакция."><AlertCircle /> {session.suspiciousEvents}</span> : <span className="ok-check"><CheckCircle2 /></span>}</td></tr>)}
+          <div className="patient-table-wrap"><table className="session-table"><thead><tr><th>Дата и время</th><th>Длительность</th><th>Выдохи</th><th>Ср. выдох</th><th>Правильность</th><th>Циклы</th><th>Монеты</th><th>Ровность</th></tr></thead><tbody>
+            {filtered.map((session) => <tr key={session.id}><td><b>{formatDate(session.startedAt)}</b><small>{formatTime(session.startedAt)} {session.inputMode === 'demo' && <em>демо</em>}</small></td><td>{formatDuration(session.durationSeconds)}</td><td>{session.breathCount}</td><td>{session.averageBreathDuration === null ? '—' : `${session.averageBreathDuration.toFixed(1)} с`}</td><td><span className={`quality-value ${session.correctBreathPercent >= 80 ? 'quality-value--good' : 'quality-value--warn'}`}>{Math.round(session.correctBreathPercent)}%</span></td><td>{session.completedCycles}/{session.targetCycles}</td><td>{session.coinsCollected}</td><td>{session.averageStability === null ? <span className="ok-check">—</span> : <span className={`quality-value ${session.averageStability >= 70 ? 'quality-value--good' : 'quality-value--warn'}`}>{session.averageStability}</span>}</td></tr>)}
             {!filtered.length && <tr><td colSpan={8}><div className="empty-table">Нет сессий по выбранным фильтрам</div></td></tr>}
           </tbody></table></div>
-          <div className="table-footnote"><Info /> Проверка звука использует объяснимые эвристики. Возможны ложные срабатывания; ребёнок может повторить калибровку.</div>
+          <div className="table-footnote"><Info /> Ровность дыхания рассчитывается по производной формуле и <b>требует валидации</b>. Прочерк — метрика недоступна для этой записи.</div>
         </section>
       </main>
     </SpecialistShell>
@@ -87,17 +87,18 @@ function summaryTitle(missed: number, trend: number): string {
   if (trend > 4) return 'Качество выдоха растёт';
   return 'Показатели стабильны';
 }
-function summaryText(missed: number, trend: number, duration: number): string {
-  if (missed > 1) return `За эту неделю пропущено ${missed} занятия. Средняя продолжительность выдоха — ${duration} сек.`;
-  return `Средняя продолжительность выдоха — ${duration} сек. Недельная динамика правильности: ${trend >= 0 ? '+' : ''}${trend}%.`;
+function summaryText(missed: number, trend: number, duration: number | null): string {
+  const value = duration === null ? 'нет данных' : `${duration} сек`;
+  if (missed > 1) return `За эту неделю пропущено ${missed} занятия. Средняя продолжительность выдоха — ${value}.`;
+  return `Средняя продолжительность выдоха — ${value}. Недельная динамика правильности: ${trend >= 0 ? '+' : ''}${trend}%.`;
 }
 const formatDate = (date: string) => new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(date));
 const formatTime = (date: string) => new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(new Date(date));
 const formatDuration = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
 function exportCsv(sessions: SessionRecord[], nickname: string) {
-  const header = ['Дата', 'Длительность, сек', 'Выдохи', 'Средний выдох, сек', 'Правильность, %', 'Циклы', 'Цель', 'Монеты', 'События проверки', 'Режим'];
-  const rows = sessions.map((session) => [session.startedAt, session.durationSeconds, session.breathCount, session.averageBreathDuration.toFixed(2), session.correctBreathPercent.toFixed(1), session.completedCycles, session.targetCycles, session.coinsCollected, session.suspiciousEvents, session.inputMode]);
+  const header = ['Дата', 'Длительность, сек', 'Выдохи', 'Средний выдох, сек', 'Ровность', 'Правильность, %', 'Циклы', 'Цель', 'Монеты', 'Режим'];
+  const rows = sessions.map((session) => [session.startedAt, session.durationSeconds, session.breathCount, session.averageBreathDuration?.toFixed(2) ?? '', session.averageStability ?? '', session.correctBreathPercent.toFixed(1), session.completedCycles, session.targetCycles, session.coinsCollected, session.inputMode]);
   const escape = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
   const csv = '\uFEFF' + [header, ...rows].map((row) => row.map(escape).join(';')).join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
