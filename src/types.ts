@@ -55,15 +55,23 @@ export interface SessionPayload {
   childId: string;
   startedAt: string;
   durationSeconds: number;
+  /** Все breath-сегменты, включая короткие. */
   breathCount: number;
   averageStrength: number;
-  averageBreathDuration: number;
+  /** Среднее по завершённым выдохам; null, если завершённых не было. */
+  averageBreathDuration: number | null;
+  /** 0..100, «требует валидации»; null без завершённых выдохов. */
+  averageStability: number | null;
   correctBreathPercent: number;
+  /** Завершённые выдохи: непрерывные сегменты не короче порога. */
   completedCycles: number;
   targetCycles: number;
   coinsCollected: number;
-  obstaclesAvoided: number;
-  suspiciousEvents: number;
+  /** Техническая метрика конвейера, мс. Не физиологическая. */
+  averageLatencyMs: number | null;
+  maxLatencyMs: number | null;
+  /** Сколько раз включалась мягкая техническая пауза по постороннему звуку. */
+  technicalPauses: number;
   status: 'completed' | 'stopped';
   inputMode: 'microphone' | 'demo';
 }
@@ -80,6 +88,7 @@ export interface WeeklyPoint {
   target: number;
   averageCorrect: number;
   averageDuration: number;
+  averageStability: number | null;
   cycles: number;
   targetCycles: number;
 }
@@ -89,7 +98,8 @@ export interface PatientSummary {
   targetSessions: number;
   adherencePercent: number;
   averageCorrectPercent: number;
-  averageBreathDuration: number;
+  averageBreathDuration: number | null;
+  averageStability: number | null;
   averageSessionDuration: number;
   cycleCompletionPercent: number;
   missedThisWeek: number;

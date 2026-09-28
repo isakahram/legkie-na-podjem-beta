@@ -13,6 +13,15 @@ import type { Assignment, PatientSummary, SessionRecord, WeeklyPoint } from '../
 const average = (values: number[]): number =>
   values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
 
+/**
+ * Среднее по метрике, которой может не быть в старых записях.
+ * Пустой набор даёт null, а не 0: отсутствие данных — не нулевой результат.
+ */
+const averageOrNull = (values: Array<number | null>, precision = 0): number | null => {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length === 0 ? null : round(average(known), precision);
+};
+
 const round = (value: number, precision = 0): number => {
   const factor = 10 ** precision;
   return Math.round(value * factor) / factor;
@@ -51,6 +60,7 @@ export function calculatePatientAnalytics(
       target: assignment.sessionsPerWeek,
       averageCorrect: round(average(inWeek.map((session) => session.correctBreathPercent))),
       averageDuration: round(average(inWeek.map((session) => session.durationSeconds))),
+      averageStability: averageOrNull(inWeek.map((session) => session.averageStability)),
       cycles: inWeek.reduce((sum, session) => sum + session.completedCycles, 0),
       targetCycles: assignment.cyclesPerSession * assignment.sessionsPerWeek,
     };
@@ -70,7 +80,8 @@ export function calculatePatientAnalytics(
       targetSessions: assignment.sessionsPerWeek,
       adherencePercent: Math.min(100, round((thisWeek.length / assignment.sessionsPerWeek) * 100)),
       averageCorrectPercent: round(average(eligible.map((session) => session.correctBreathPercent))),
-      averageBreathDuration: round(average(eligible.map((session) => session.averageBreathDuration)), 1),
+      averageBreathDuration: averageOrNull(eligible.map((session) => session.averageBreathDuration), 1),
+      averageStability: averageOrNull(eligible.map((session) => session.averageStability)),
       averageSessionDuration: round(average(eligible.map((session) => session.durationSeconds))),
       cycleCompletionPercent:
         totalTargetCycles === 0 ? 0 : Math.min(100, round((totalCompletedCycles / totalTargetCycles) * 100)),

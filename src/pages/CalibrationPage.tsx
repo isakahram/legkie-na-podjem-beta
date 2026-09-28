@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { MicrophoneAnalyzer } from '../audio/analyzer';
 import { createCalibrationProfile } from '../audio/classifier';
-import { playTone, speakHint } from '../audio/sounds';
+import { playTone } from '../audio/sounds';
 import { Balloon } from '../components/Balloon';
 import { Brand } from '../components/Brand';
 import { useChild } from '../context/ChildContext';
@@ -51,11 +51,9 @@ export function CalibrationPage() {
         if (phaseRef.current === 'breath') breathFrames.current.push(features);
       });
       setPhase('quiet');
-      speakHint('Сиди спокойно. Сейчас послушаем тишину.');
       animateProgress(2_600);
       timers.current.push(window.setTimeout(() => {
         setPhase('breath');
-        speakHint('А теперь сделай длинный спокойный выдох в микрофон.');
         animateProgress(5_200);
         timers.current.push(window.setTimeout(() => void complete(), 5_200));
       }, 2_600));
@@ -85,7 +83,6 @@ export function CalibrationPage() {
       setCalibration(result);
       setPhase('success');
       playTone('success');
-      speakHint('Отлично! Всё готово к полёту.');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Калибровка не получилась');
       setPhase('error');
