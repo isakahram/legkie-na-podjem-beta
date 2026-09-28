@@ -3,6 +3,7 @@ import { SpecialistLayout } from './SpecialistLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { DemoEntryPage } from './pages/DemoEntryPage';
 import { LoginPage } from './pages/LoginPage';
+import { PatientDetailPage } from './pages/PatientDetailPage';
 import { PatientsPage } from './pages/PatientsPage';
 
 /**
@@ -16,6 +17,8 @@ export const specialistRoutes = (
     <Route path="/specialist" element={<SpecialistLayout />}>
       <Route index element={<DashboardPage />} />
       <Route path="patients" element={<PatientsPage />} />
+      <Route path="patients/:id" element={<PatientDetailPage />} />
+      <Route path="patients/:id/:tab" element={<PatientDetailPage />} />
     </Route>
   </>
 );

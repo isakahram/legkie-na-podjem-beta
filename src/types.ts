@@ -22,7 +22,7 @@ export interface SessionPayload {
   technicalPauses: number; status: 'completed' | 'stopped'; inputMode: 'microphone' | 'demo';
 }
 export interface SessionRecord extends SessionPayload { id: string; childNickname?: string; }
-export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
+export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; averageBreathDuration?: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
 export interface PatientSummary { sessionsThisWeek: number; targetSessions: number; adherencePercent: number; averageCorrectPercent: number; averageBreathDuration: number | null; bestDuration?: number | null; averageStability: number | null; averageSessionDuration: number; breathCompletionPercent: number; cycleCompletionPercent?: number; missedThisWeek: number; lastSessionAt: string | null; trendPercent: number; }
 export interface ClinicianChild extends ChildProfile { code: string; summary: PatientSummary; }
 export interface PatientDetail { child: ClinicianChild; weekly: WeeklyPoint[]; sessions: SessionRecord[]; }
@@ -102,7 +102,7 @@ export interface PatientListItemDto {
 }
 
 export interface PatientV1DetailDto {
-  patient: PatientListItemDto;
+  patient: PatientListItemWithAttention;
   weekly: WeeklyPoint[];
   sessions: SessionRecord[];
   assignments: AssignmentVersionDto[];
@@ -245,4 +245,88 @@ export interface AuthSessionDto {
   userAgent: string | null;
   ip: string | null;
   current: boolean;
+}
+
+// ==========================================
+// КАРТОЧКА РЕБЁНКА: АНАЛИТИКА, СЕССИИ, ОТЧЁТЫ
+// ==========================================
+
+export interface PeriodMetrics {
+  from: string;
+  to: string;
+  sessions: number;
+  averageBreathDuration: number | null;
+  averageStability: number | null;
+  averageSessionDuration: number;
+  totalBreaths: number;
+  adherencePercent: number;
+}
+
+export interface PeriodComparison {
+  current: PeriodMetrics;
+  previous: PeriodMetrics;
+  /** Изменение в процентах по каждому показателю; null — не с чем сравнивать. */
+  delta: {
+    sessions: number | null;
+    averageBreathDuration: number | null;
+    averageStability: number | null;
+    totalBreaths: number | null;
+    adherencePercent: number | null;
+  };
+}
+
+export interface PlanFactPoint {
+  week: string;
+  label: string;
+  factSessions: number;
+  planSessions: number;
+  factBreaths: number;
+  planBreaths: number;
+}
+
+export interface PatientAnalyticsDto {
+  weekly: WeeklyPoint[];
+  planFact: PlanFactPoint[];
+  comparison: PeriodComparison;
+}
+
+export interface SessionsQuery {
+  patientId?: string;
+  from?: string;
+  to?: string;
+  minDurationSeconds?: number;
+  maxDurationSeconds?: number;
+  minBreaths?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SessionsResponse {
+  items: SessionRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ReportSummary {
+  periodStart: string;
+  periodEnd: string;
+  sessions: number;
+  averageAdherencePercent: number;
+  averageSessionDuration: number;
+  averageBreathDuration: number | null;
+  averageStability: number | null;
+  totalBreaths: number;
+  trendPercent: number;
+  weekly: WeeklyPoint[];
+}
+
+export interface ReportSnapshotDto {
+  id: string;
+  patientId: string;
+  createdByUserId: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  data: ReportSummary;
 }

@@ -4,7 +4,11 @@ import type {
   DashboardDto,
   DashboardPeriod,
   PatientListResponse,
+  PatientAnalyticsDto,
   PatientsQuery,
+  ReportSnapshotDto,
+  SessionsQuery,
+  SessionsResponse,
   AssignmentVersionDto,
   AuthResponse,
   CalibrationProfile,
@@ -110,6 +114,22 @@ export const api = {
         body: JSON.stringify(input),
       }),
     getPatient: (id: string) => request<PatientV1DetailDto>(`/api/v1/patients/${id}`),
+
+    getPatientAnalytics: (id: string) =>
+      request<PatientAnalyticsDto>(`/api/v1/patients/${id}/analytics`),
+    listPatientSessions: (id: string, query: SessionsQuery = {}) =>
+      request<SessionsResponse>(`/api/v1/patients/${id}/sessions${toQueryString(query)}`),
+    listSessions: (query: SessionsQuery = {}) =>
+      request<SessionsResponse>(`/api/v1/sessions${toQueryString(query)}`),
+    getSession: (sessionId: string) => request<SessionRecord>(`/api/v1/sessions/${sessionId}`),
+
+    listReports: (patientId: string) =>
+      request<ReportSnapshotDto[]>(`/api/v1/patients/${patientId}/reports`),
+    createReport: (patientId: string, body: { periodStart: string; periodEnd: string }) =>
+      request<ReportSnapshotDto>(`/api/v1/patients/${patientId}/reports`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
 
     listAssignments: (patientId: string) =>
       request<AssignmentVersionDto[]>(`/api/v1/patients/${patientId}/assignments`),

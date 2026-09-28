@@ -611,6 +611,65 @@ export class AppDatabase {
   }
 
   // ==========================================
+  // СНИМКИ ОТЧЁТОВ
+  // ==========================================
+
+  createReportSnapshot(params: {
+    patientId: string;
+    createdByUserId: string;
+    periodStart: string;
+    periodEnd: string;
+    data: unknown;
+  }): { id: string; createdAt: string } {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO report_snapshots
+           (id, patient_id, created_by_user_id, period_start, period_end, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        params.patientId,
+        params.createdByUserId,
+        params.periodStart,
+        params.periodEnd,
+        JSON.stringify(params.data),
+        createdAt,
+      );
+    return { id, createdAt };
+  }
+
+  listReportSnapshots(patientId: string, limit = 50): Array<{
+    id: string;
+    patient_id: string;
+    created_by_user_id: string;
+    period_start: string;
+    period_end: string;
+    data_json: string;
+    created_at: string;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT id, patient_id, created_by_user_id, period_start, period_end, data_json, created_at
+         FROM report_snapshots
+         WHERE patient_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      )
+      .all(patientId, limit) as unknown as Array<{
+      id: string;
+      patient_id: string;
+      created_by_user_id: string;
+      period_start: string;
+      period_end: string;
+      data_json: string;
+      created_at: string;
+    }>;
+  }
+
+  // ==========================================
   // АУДИТ-ЛОГ
   // ==========================================
 

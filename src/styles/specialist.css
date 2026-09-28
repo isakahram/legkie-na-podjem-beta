@@ -1032,3 +1032,238 @@
     flex-direction: column;
   }
 }
+
+/* --- Карточка ребёнка --------------------------------------------------- */
+
+.sp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sp-muted);
+  font-size: 0.88rem;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.sp-back:hover {
+  color: var(--sp-accent);
+}
+
+.sp-patient-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px;
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius);
+  box-shadow: var(--sp-shadow);
+  flex-wrap: wrap;
+}
+
+.sp-avatar--lg {
+  width: 58px;
+  height: 58px;
+  font-size: 1.1rem;
+}
+
+.sp-patient-hero__body {
+  flex: 1;
+  min-width: 200px;
+}
+
+.sp-patient-hero__body h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.sp-patient-hero__body p {
+  margin: 4px 0 8px;
+  color: var(--sp-muted);
+  font-size: 0.88rem;
+}
+
+.sp-patient-hero__body code {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--sp-bg);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.sp-patient-hero__pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sp-patient-hero__assignment {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--sp-accent-soft);
+  min-width: 230px;
+}
+
+.sp-patient-hero__assignment small {
+  display: block;
+  color: var(--sp-muted);
+  font-size: 0.78rem;
+}
+
+.sp-patient-hero__assignment b {
+  display: block;
+  margin: 3px 0;
+  color: var(--sp-accent);
+  font-size: 1rem;
+}
+
+.sp-patient-hero__assignment span {
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--sp-border);
+  overflow-x: auto;
+}
+
+.sp-tabs a {
+  padding: 10px 15px;
+  border-bottom: 2px solid transparent;
+  color: var(--sp-muted);
+  font-size: 0.92rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.sp-tabs a:hover {
+  color: var(--sp-text);
+}
+
+.sp-tabs a.is-active {
+  color: var(--sp-accent);
+  border-bottom-color: var(--sp-accent);
+}
+
+.sp-defs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.sp-defs dt {
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-defs dd {
+  margin: 2px 0 0;
+  font-size: 0.98rem;
+  font-weight: 500;
+}
+
+.sp-reason-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sp-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sp-accent);
+  font: inherit;
+  font-size: 0.88rem;
+  text-decoration: none;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.sp-link:hover {
+  text-decoration: underline;
+}
+
+.sp-filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.sp-filters .sp-select {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.sp-filters input {
+  padding: 8px 10px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--sp-text);
+}
+
+.sp-report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sp-report-head small {
+  display: block;
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-history button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sp-history button.is-active {
+  border-color: var(--sp-accent);
+  background: var(--sp-accent-soft);
+}
+
+.sp-history small {
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}

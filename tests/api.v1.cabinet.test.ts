@@ -291,3 +291,101 @@ describe('Версионирование назначений', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('Аналитика, журнал занятий и отчёты карточки', () => {
+  const patientId = 'patient-maria-stable';
+
+  it('GET /patients/:id/analytics — ряды, план/факт и сравнение периодов', async () => {
+    const res = await fetch(`${baseUrl}/patients/${patientId}/analytics`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.weekly).toHaveLength(8);
+    expect(data.planFact).toHaveLength(8);
+    expect(data.planFact[0].planSessions).toBeGreaterThan(0);
+    expect(data.comparison.current).toHaveProperty('adherencePercent');
+    expect(data.comparison.previous).toHaveProperty('sessions');
+  });
+
+  it('GET /patients/:id/analytics — 403 для чужого пациента', async () => {
+    const res = await fetch(`${baseUrl}/patients/patient-progress/analytics`, authed(mariaToken));
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /patients/:id/sessions — страница журнала с фильтрами', async () => {
+    const all = (await (
+      await fetch(`${baseUrl}/patients/${patientId}/sessions?pageSize=100`, authed(mariaToken))
+    ).json()) as any;
+    expect(all.total).toBeGreaterThan(0);
+
+    const filtered = (await (
+      await fetch(`${baseUrl}/patients/${patientId}/sessions?minBreaths=8&pageSize=100`, authed(mariaToken))
+    ).json()) as any;
+    expect(filtered.total).toBeLessThanOrEqual(all.total);
+    for (const item of filtered.items) {
+      expect(item.completedBreaths).toBeGreaterThanOrEqual(8);
+    }
+  });
+
+  it('GET /sessions/:sessionId — агрегаты одного занятия своего пациента', async () => {
+    const page = (await (
+      await fetch(`${baseUrl}/patients/${patientId}/sessions?pageSize=1`, authed(mariaToken))
+    ).json()) as any;
+    const sessionId = page.items[0].id;
+
+    const mine = await fetch(`${baseUrl}/sessions/${sessionId}`, authed(mariaToken));
+    expect(mine.status).toBe(200);
+
+    const foreign = await fetch(`${baseUrl}/sessions/${sessionId}`, authed(doctorToken));
+    expect(foreign.status).toBe(404);
+  });
+
+  it('POST /patients/:id/reports — создаёт снимок и кладёт его в историю', async () => {
+    const periodEnd = new Date();
+    const periodStart = new Date(periodEnd.getTime() - 8 * 7 * 86_400_000);
+
+    const created = await fetch(
+      `${baseUrl}/patients/${patientId}/reports`,
+      authed(mariaToken, {
+        method: 'POST',
+        body: JSON.stringify({ periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() }),
+      }),
+    );
+    expect(created.status).toBe(201);
+
+    const report = (await created.json()) as any;
+    expect(report.data.sessions).toBeGreaterThan(0);
+    expect(report.data).toHaveProperty('averageAdherencePercent');
+
+    const history = (await (
+      await fetch(`${baseUrl}/patients/${patientId}/reports`, authed(mariaToken))
+    ).json()) as any[];
+    expect(history.some((item) => item.id === report.id)).toBe(true);
+  });
+
+  it('POST /patients/:id/reports — 403 в демо-режиме', async () => {
+    const res = await fetch(
+      `${baseUrl}/patients/patient-progress/reports`,
+      authed(demoToken, { method: 'POST', body: JSON.stringify({}) }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /sessions — глобальный журнал ограничен своими пациентами', async () => {
+    const res = await fetch(`${baseUrl}/sessions?pageSize=200`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.total).toBeGreaterThan(0);
+    const ids = new Set(data.items.map((item: any) => item.childId));
+    for (const id of ids) {
+      expect(String(id).startsWith('patient-maria-') || String(id).length === 36).toBe(true);
+    }
+    expect(ids.has('patient-progress')).toBe(false);
+  });
+
+  it('GET /sessions?patientId=чужой — 403', async () => {
+    const res = await fetch(`${baseUrl}/sessions?patientId=patient-progress`, authed(mariaToken));
+    expect(res.status).toBe(403);
+  });
+});

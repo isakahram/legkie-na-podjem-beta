@@ -62,6 +62,7 @@ export function calculatePatientAnalytics(
       averageCorrect: round(average(inWeek.map((session) => session.correctBreathPercent))),
       averageDuration: round(average(inWeek.map((session) => session.durationSeconds))),
       averageStability: averageOrNull(inWeek.map((session) => session.averageStability)),
+      averageBreathDuration: averageOrNull(inWeek.map((session) => session.averageBreathDuration), 1),
       breaths: inWeek.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0),
       targetBreaths: targetBreaths * assignment.sessionsPerWeek,
       cycles: inWeek.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0),
