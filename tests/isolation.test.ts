@@ -7,17 +7,39 @@ import { AppDatabase } from '../server/db.ts';
 
 let directory = '';
 let dbPath = '';
+const openDatabases: AppDatabase[] = [];
+
+/** Открывает БД и регистрирует её для закрытия в afterEach (важно для Windows). */
+const openDatabase = (file: string): AppDatabase => {
+  const db = new AppDatabase(file);
+  openDatabases.push(db);
+  return db;
+};
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'legkie-iso-'));
   dbPath = join(directory, 'test.sqlite');
 });
 
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+afterEach(() => {
+  // Windows не удаляет файлы с открытыми дескрипторами — закрываем соединения явно.
+  for (const db of openDatabases.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      // соединение уже закрыто — игнорируем
+    }
+  }
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // уборка временного каталога не должна ронять тесты (антивирус/индексатор на Windows)
+  }
+});
 
 describe('Изоляция пациентов и разграничение прав (RBAC)', () => {
   it('специалист видит только тех пациентов, к которым ему выдан доступ', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
 
     // Создаём двух разных специалистов
     const spec1Id = 'user-spec-1';
@@ -61,7 +83,7 @@ describe('Изоляция пациентов и разграничение пр
   });
 
   it('администратор имеет доступ ко всем пациентам', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const admin = db.findUserByEmail('admin@legkie.local')!;
     expect(admin.role).toBe('admin');
 
@@ -74,7 +96,7 @@ describe('Изоляция пациентов и разграничение пр
   });
 
   it('создание версий назначений сохраняет историю и привязку к создателю', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const patientId = 'patient-progress';
     const doctor = db.findUserByEmail('doctor@legkie.local')!;
 
@@ -102,7 +124,7 @@ describe('Изоляция пациентов и разграничение пр
   });
 
   it('аудит-лог не содержит персональных данных (email, псевдоним, диагноз) в details', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const doctor = db.findUserByEmail('doctor@legkie.local')!;
 
     db.logAuditEvent({

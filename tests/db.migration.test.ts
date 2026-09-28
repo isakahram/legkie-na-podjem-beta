@@ -7,6 +7,14 @@ import { AppDatabase } from '../server/db.ts';
 
 let directory = '';
 let path = '';
+const openDatabases: AppDatabase[] = [];
+
+/** Открывает БД и регистрирует её для закрытия в afterEach (важно для Windows). */
+const openDatabase = (file: string): AppDatabase => {
+  const db = new AppDatabase(file);
+  openDatabases.push(db);
+  return db;
+};
 
 /** Схема, существовавшая до перехода на «Воздушный шар». */
 const createLegacyDatabase = (file: string): void => {
@@ -63,12 +71,26 @@ beforeEach(() => {
   path = join(directory, 'legacy.sqlite');
 });
 
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+afterEach(() => {
+  // Windows не удаляет файлы с открытыми дескрипторами — закрываем соединения явно.
+  for (const db of openDatabases.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      // соединение уже закрыто — игнорируем
+    }
+  }
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // уборка временного каталога не должна ронять тесты (антивирус/индексатор на Windows)
+  }
+});
 
 describe('миграция старой базы', () => {
   it('переносит старые сессии и возвращает новые метрики как null', () => {
     createLegacyDatabase(path);
-    const db = new AppDatabase(path);
+    const db = openDatabase(path);
     const [session] = db.listSessions('child-old');
     expect(session.id).toBe('session-old');
     expect(session.averageBreathDuration).toBe(2.4);
@@ -81,7 +103,7 @@ describe('миграция старой базы', () => {
 
   it('сохраняет колонку obstacles_avoided ради безопасной миграции', () => {
     createLegacyDatabase(path);
-    const _db = new AppDatabase(path);
+    const _db = openDatabase(path);
     const raw = new DatabaseSync(path);
     const columns = (raw.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>)
       .map((column) => column.name);
@@ -92,7 +114,7 @@ describe('миграция старой базы', () => {
   });
 
   it('записывает новую сессию с null-метриками', () => {
-    const db = new AppDatabase(path);
+    const db = openDatabase(path);
     const child = db.listChildren()[0];
     const saved = db.insertSession({
       childId: child.id,
@@ -119,7 +141,7 @@ describe('миграция старой базы', () => {
   });
 
   it('создаёт таблицу schema_migrations и фиксирует применённые миграции', () => {
-    const db = new AppDatabase(path);
+    const db = openDatabase(path);
     const migrations = db.db.prepare('SELECT version, name FROM schema_migrations ORDER BY version').all() as Array<{
       version: number;
       name: string;
@@ -130,7 +152,7 @@ describe('миграция старой базы', () => {
   });
 
   it('сохраняет обратную совместимость для игровых методов: ВЕТЕР7, сессии, калибровка, магазин', () => {
-    const db = new AppDatabase(path);
+    const db = openDatabase(path);
     // Проверка входа по коду ВЕТЕР7
     const child = db.findChildByCode('ВЕТЕР7');
     expect(child).not.toBeNull();
@@ -183,7 +205,7 @@ describe('миграция старой базы', () => {
   });
 
   it('сохраняет 4 базовых демо-пациента и добавляет 5 новых клинических сценариев как отдельных пациентов', () => {
-    const db = new AppDatabase(path);
+    const db = openDatabase(path);
     // 4 базовых демо-пациента
     expect(db.findChildByCode('ВЕТЕР7')).not.toBeNull();
     expect(db.findChildByCode('ЗВЕЗДА')).not.toBeNull();

@@ -14,11 +14,34 @@ beforeEach(() => {
   dbPath = join(directory, 'test.sqlite');
 });
 
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+const openDatabases: AppDatabase[] = [];
+
+/** Открывает БД и регистрирует её для закрытия в afterEach (важно для Windows). */
+const openDatabase = (file: string): AppDatabase => {
+  const db = new AppDatabase(file);
+  openDatabases.push(db);
+  return db;
+};
+
+afterEach(() => {
+  // Windows не удаляет файлы с открытыми дескрипторами — закрываем соединения явно.
+  for (const db of openDatabases.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      // соединение уже закрыто — игнорируем
+    }
+  }
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // уборка временного каталога не должна ронять тесты (антивирус/индексатор на Windows)
+  }
+});
 
 describe('Демо-данные: 5 клинических сценариев на 8 недель', () => {
   it('Сценарий 1: Стабильный прогресс (patient-progress)', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const child = db.getChild('patient-progress')!;
     expect(child).not.toBeNull();
     const sessions = db.listSessions(child.id);
@@ -41,7 +64,7 @@ describe('Демо-данные: 5 клинических сценариев н�
   });
 
   it('Сценарий 2: Пропуски занятий (patient-skips)', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const child = db.getChild('patient-skips')!;
     expect(child).not.toBeNull();
     const sessions = db.listSessions(child.id);
@@ -60,7 +83,7 @@ describe('Демо-данные: 5 клинических сценариев н�
   });
 
   it('Сценарий 3: Ухудшение динамики (patient-decline)', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const child = db.getChild('patient-decline')!;
     expect(child).not.toBeNull();
     const sessions = db.listSessions(child.id);
@@ -76,7 +99,7 @@ describe('Демо-данные: 5 клинических сценариев н�
   });
 
   it('Сценарий 4: Новичок (patient-newbie)', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const child = db.getChild('patient-newbie')!;
     expect(child).not.toBeNull();
     const sessions = db.listSessions(child.id);
@@ -92,7 +115,7 @@ describe('Демо-данные: 5 клинических сценариев н�
   });
 
   it('Сценарий 5: Длительный перерыв (patient-break)', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const child = db.getChild('patient-break')!;
     expect(child).not.toBeNull();
     const sessions = db.listSessions(child.id);
@@ -115,7 +138,7 @@ describe('Демо-данные: 5 клинических сценариев н�
   });
 
   it('все демо-пациенты соответствуют возрастной группе 5–10 лет', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const children = db.listChildren();
     expect(children.length).toBeGreaterThanOrEqual(9);
 
