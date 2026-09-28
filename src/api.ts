@@ -1,13 +1,24 @@
 import type {
   ApiErrorBody,
+  AssignmentDefaults,
+  AuthSessionDto,
+  NotificationPrefs,
+  SpecialistProfileDto,
+  SpecialistSettingsDto,
+  CreatePatientInput,
+  DashboardDto,
+  DashboardPeriod,
+  PatientListResponse,
+  PatientAnalyticsDto,
+  PatientsQuery,
+  ReportSnapshotDto,
+  SessionsQuery,
+  SessionsResponse,
   AssignmentVersionDto,
   AuthResponse,
   CalibrationProfile,
   ChildProfile,
-  ClinicianChild,
   CreateAssignmentInput,
-  PatientDetail,
-  PatientListItemDto,
   PatientV1DetailDto,
   SessionPayload,
   SessionRecord,
@@ -28,6 +39,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(body.error || `HTTP ${response.status}`);
   }
   return response.json() as Promise<T>;
+}
+
+/** Сериализация параметров списка пациентов: пустые значения не попадают в URL. */
+function toQueryString(query: object): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query as Record<string, unknown>)) {
+    if (value === undefined || value === null || value === '') continue;
+    params.set(key, String(value));
+  }
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : '';
 }
 
 export const api = {
@@ -64,42 +86,82 @@ export const api = {
     }),
 
   // ==========================================
-  // СТАРЫЙ API КАБИНЕТА (ДЛЯ СОВМЕСТИМОСТИ UI)
-  // ==========================================
-  clinicianChildren: () => request<ClinicianChild[]>('/api/clinician/children'),
-  patientDetail: (id: string) => request<PatientDetail>(`/api/clinician/children/${id}`),
-
-  // ==========================================
-  // НОВЫЙ V1 API (ДЛЯ СПЕЦИАЛИСТА И БЕЗОПАСНОСТИ)
+  // API V1 — КАБИНЕТ СПЕЦИАЛИСТА
   // ==========================================
   v1: {
     login: (body: { email: string; password: string }) =>
-      request<AuthResponse>('/api/v1/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    logout: () =>
-      request<{ ok: true }>('/api/v1/auth/logout', {
-        method: 'POST',
-      }),
+      request<AuthResponse>('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+    logout: () => request<{ ok: true }>('/api/v1/auth/logout', { method: 'POST' }),
     me: () => request<{ user: UserDto }>('/api/v1/auth/me'),
     changePassword: (body: { oldPassword: string; newPassword: string }) =>
       request<{ ok: true }>('/api/v1/auth/change-password', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    startDemoSession: () =>
-      request<AuthResponse>('/api/v1/demo/session', {
+    startDemoSession: () => request<AuthResponse>('/api/v1/demo/session', { method: 'POST' }),
+
+    dashboard: (period: DashboardPeriod) =>
+      request<DashboardDto>(`/api/v1/dashboard?period=${period}`),
+
+    listPatients: (query: PatientsQuery = {}) =>
+      request<PatientListResponse>(`/api/v1/patients${toQueryString(query)}`),
+    createPatient: (input: CreatePatientInput) =>
+      request<{ id: string; code: string }>('/api/v1/patients', {
         method: 'POST',
+        body: JSON.stringify(input),
       }),
-    listPatients: () => request<PatientListItemDto[]>('/api/v1/patients'),
     getPatient: (id: string) => request<PatientV1DetailDto>(`/api/v1/patients/${id}`),
+
+    getPatientAnalytics: (id: string) =>
+      request<PatientAnalyticsDto>(`/api/v1/patients/${id}/analytics`),
+    listPatientSessions: (id: string, query: SessionsQuery = {}) =>
+      request<SessionsResponse>(`/api/v1/patients/${id}/sessions${toQueryString(query)}`),
+    listSessions: (query: SessionsQuery = {}) =>
+      request<SessionsResponse>(`/api/v1/sessions${toQueryString(query)}`),
+    getSession: (sessionId: string) => request<SessionRecord>(`/api/v1/sessions/${sessionId}`),
+
+    getSettings: () => request<SpecialistSettingsDto>('/api/v1/settings'),
+    updateProfile: (body: SpecialistProfileDto) =>
+      request<{ user: UserDto }>('/api/v1/settings/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    updateNotifications: (body: NotificationPrefs) =>
+      request<NotificationPrefs>('/api/v1/settings/notifications', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    updateAssignmentDefaults: (body: AssignmentDefaults) =>
+      request<AssignmentDefaults>('/api/v1/settings/defaults', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    exportData: () => request<unknown>('/api/v1/settings/export'),
+
+    listAuthSessions: () => request<AuthSessionDto[]>('/api/v1/auth/sessions'),
+    revokeAuthSession: (sessionId: string) =>
+      request<{ ok: true }>(`/api/v1/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    revokeAllAuthSessions: () =>
+      request<{ ok: true }>('/api/v1/auth/sessions/revoke-all', { method: 'POST' }),
+
+    listReports: (patientId: string) =>
+      request<ReportSnapshotDto[]>(`/api/v1/patients/${patientId}/reports`),
+    createReport: (patientId: string, body: { periodStart: string; periodEnd: string }) =>
+      request<ReportSnapshotDto>(`/api/v1/patients/${patientId}/reports`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
     listAssignments: (patientId: string) =>
       request<AssignmentVersionDto[]>(`/api/v1/patients/${patientId}/assignments`),
     createAssignment: (patientId: string, input: CreateAssignmentInput) =>
       request<AssignmentVersionDto>(`/api/v1/patients/${patientId}/assignments`, {
         method: 'POST',
         body: JSON.stringify(input),
+      }),
+    closeAssignment: (patientId: string, versionId: string) =>
+      request<{ ok: true }>(`/api/v1/patients/${patientId}/assignments/${versionId}/close`, {
+        method: 'POST',
       }),
   },
 };

@@ -23,6 +23,10 @@ export interface UserRow {
   organization_name?: string | null;
   created_at: string;
   last_login_at: string | null;
+  display_name: string | null;
+  clinic_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
 }
 
 export interface AuthSessionRow {
@@ -116,7 +120,8 @@ export class AppDatabase {
     const row = this.db
       .prepare(
         `SELECT u.id, u.email, u.password_hash, u.role, u.organization_id,
-                o.name AS organization_name, u.created_at, u.last_login_at
+                o.name AS organization_name, u.created_at, u.last_login_at,
+                u.display_name, u.clinic_name, u.contact_email, u.contact_phone
          FROM users u
          LEFT JOIN organizations o ON o.id = u.organization_id
          WHERE LOWER(u.email) = LOWER(?)`,
@@ -129,7 +134,8 @@ export class AppDatabase {
     const row = this.db
       .prepare(
         `SELECT u.id, u.email, u.password_hash, u.role, u.organization_id,
-                o.name AS organization_name, u.created_at, u.last_login_at
+                o.name AS organization_name, u.created_at, u.last_login_at,
+                u.display_name, u.clinic_name, u.contact_email, u.contact_phone
          FROM users u
          LEFT JOIN organizations o ON o.id = u.organization_id
          WHERE u.id = ?`,
@@ -181,7 +187,8 @@ export class AppDatabase {
                 s.user_agent, s.ip,
                 u.email AS user_email, u.role AS user_role, u.password_hash,
                 u.organization_id, o.name AS organization_name,
-                u.created_at AS user_created_at, u.last_login_at AS user_last_login_at
+                u.created_at AS user_created_at, u.last_login_at AS user_last_login_at,
+                u.display_name, u.clinic_name, u.contact_email, u.contact_phone
          FROM auth_sessions s
          JOIN users u ON u.id = s.user_id
          LEFT JOIN organizations o ON o.id = u.organization_id
@@ -192,6 +199,10 @@ export class AppDatabase {
           password_hash: string;
           user_created_at: string;
           user_last_login_at?: string | null;
+          display_name: string | null;
+          clinic_name: string | null;
+          contact_email: string | null;
+          contact_phone: string | null;
         })
       | undefined;
 
@@ -214,6 +225,10 @@ export class AppDatabase {
         organization_name: row.organization_name ?? null,
         created_at: row.user_created_at,
         last_login_at: row.user_last_login_at ?? null,
+        display_name: row.display_name ?? null,
+        clinic_name: row.clinic_name ?? null,
+        contact_email: row.contact_email ?? null,
+        contact_phone: row.contact_phone ?? null,
       },
     };
   }
@@ -407,6 +422,251 @@ export class AppDatabase {
       note: params.note,
       created_at: now,
     };
+  }
+
+  /** Завершение текущей версии назначения: проставляем valid_until. */
+  closeAssignmentVersion(assignmentId: string, validUntil = new Date().toISOString()): boolean {
+    const result = this.db
+      .prepare('UPDATE assignment_versions SET valid_until = ? WHERE id = ? AND valid_until IS NULL')
+      .run(validUntil, assignmentId);
+    return Number(result.changes) > 0;
+  }
+
+  // ==========================================
+  // СОЗДАНИЕ ПАЦИЕНТА СПЕЦИАЛИСТОМ
+  // ==========================================
+
+  /** Генерация уникального кода доступа к игре (кириллица + цифра, как у демо-профилей). */
+  private generateAccessCode(): string {
+    const alphabet = 'АБВГДЕЖЗИКЛМНОПРСТУФХЦЧШЭЮЯ';
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      let code = '';
+      for (let index = 0; index < 5; index += 1) {
+        code += alphabet[Math.floor(Math.random() * alphabet.length)];
+      }
+      code += String(Math.floor(Math.random() * 10));
+      const exists = this.db.prepare('SELECT 1 FROM game_access_codes WHERE code = ?').get(code);
+      if (!exists) return code;
+    }
+    return `КОД${Date.now().toString().slice(-6)}`;
+  }
+
+  createPatient(params: {
+    pseudonym: string;
+    age: number;
+    gender: 'male' | 'female' | 'unspecified';
+    ownerUserId: string;
+    sessionsPerWeek: number;
+    targetBreaths: number;
+    minCompletedBreathSeconds: number;
+    note?: string | null;
+  }): { id: string; code: string } {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const code = this.generateAccessCode();
+    const avatar = params.pseudonym
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('')
+      .slice(0, 2) || 'ПЦ';
+
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO patients (id, pseudonym, age, gender, avatar, balance, selected_skin, created_at)
+           VALUES (?, ?, ?, ?, ?, 0, 'berry', ?)`,
+        )
+        .run(id, params.pseudonym, params.age, params.gender, avatar, now);
+
+      this.db
+        .prepare(
+          `INSERT INTO game_access_codes (id, patient_id, code, created_at, is_active)
+           VALUES (?, ?, ?, ?, 1)`,
+        )
+        .run(randomUUID(), id, code, now);
+
+      this.db
+        .prepare('INSERT INTO patient_skins (patient_id, skin_id, unlocked_at) VALUES (?, ?, ?)')
+        .run(id, 'berry', now);
+
+      this.db
+        .prepare(
+          `INSERT INTO patient_access (id, user_id, patient_id, granted_at, granted_by_user_id)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(randomUUID(), params.ownerUserId, id, now, params.ownerUserId);
+
+      this.db
+        .prepare(
+          `INSERT INTO assignment_versions (
+             id, patient_id, created_by_user_id, sessions_per_week, target_breaths,
+             min_completed_breath_seconds, target_breath_duration_min, target_breath_duration_max,
+             valid_from, note, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, 2.0, 4.0, ?, ?, ?)`,
+        )
+        .run(
+          randomUUID(),
+          id,
+          params.ownerUserId,
+          params.sessionsPerWeek,
+          params.targetBreaths,
+          params.minCompletedBreathSeconds,
+          now,
+          params.note ?? 'Первичное назначение',
+          now,
+        );
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+
+    return { id, code };
+  }
+
+  // ==========================================
+  // ПРОФИЛЬ И НАСТРОЙКИ СПЕЦИАЛИСТА
+  // ==========================================
+
+  updateUserProfile(
+    userId: string,
+    profile: { displayName: string | null; clinicName: string | null; contactEmail: string | null; contactPhone: string | null },
+  ): void {
+    this.db
+      .prepare(
+        'UPDATE users SET display_name = ?, clinic_name = ?, contact_email = ?, contact_phone = ? WHERE id = ?',
+      )
+      .run(profile.displayName, profile.clinicName, profile.contactEmail, profile.contactPhone, userId);
+  }
+
+  getSpecialistSettings(userId: string): { thresholds: unknown; notifications: unknown; updatedAt: string | null } {
+    const row = this.db
+      .prepare(
+        'SELECT default_thresholds_json, notification_prefs_json, updated_at FROM specialist_settings WHERE user_id = ?',
+      )
+      .get(userId) as
+      | { default_thresholds_json: string | null; notification_prefs_json: string | null; updated_at: string }
+      | undefined;
+
+    const parse = (value: string | null): unknown => {
+      if (!value) return null;
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        return null;
+      }
+    };
+
+    return {
+      thresholds: parse(row?.default_thresholds_json ?? null),
+      notifications: parse(row?.notification_prefs_json ?? null),
+      updatedAt: row?.updated_at ?? null,
+    };
+  }
+
+  saveSpecialistSettings(userId: string, patch: { thresholds?: unknown; notifications?: unknown }): void {
+    const current = this.getSpecialistSettings(userId);
+    const thresholds = patch.thresholds === undefined ? current.thresholds : patch.thresholds;
+    const notifications = patch.notifications === undefined ? current.notifications : patch.notifications;
+    this.db
+      .prepare(
+        `INSERT INTO specialist_settings (id, user_id, default_thresholds_json, notification_prefs_json, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           default_thresholds_json = excluded.default_thresholds_json,
+           notification_prefs_json = excluded.notification_prefs_json,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        randomUUID(),
+        userId,
+        thresholds === null ? null : JSON.stringify(thresholds),
+        notifications === null ? null : JSON.stringify(notifications),
+        new Date().toISOString(),
+      );
+  }
+
+  /** Активные сессии входа пользователя — для раздела «Безопасность». */
+  listAuthSessionsForUser(userId: string, now = new Date().toISOString()): AuthSessionRow[] {
+    return this.db
+      .prepare(
+        `SELECT id, user_id, token_hash, expires_at, created_at, last_active_at, user_agent, ip
+         FROM auth_sessions
+         WHERE user_id = ? AND expires_at > ?
+         ORDER BY last_active_at DESC`,
+      )
+      .all(userId, now) as unknown as AuthSessionRow[];
+  }
+
+  /** Сессии всех доступных специалисту пациентов (глобальная таблица занятий). */
+  listSessionsForUser(userId: string): SessionRecord[] {
+    const patientIds = this.listPatientsForUser(userId).map((patient) => patient.id);
+    if (patientIds.length === 0) return [];
+    const allowed = new Set(patientIds);
+    return this.listSessions().filter((session) => allowed.has(session.childId));
+  }
+
+  // ==========================================
+  // СНИМКИ ОТЧЁТОВ
+  // ==========================================
+
+  createReportSnapshot(params: {
+    patientId: string;
+    createdByUserId: string;
+    periodStart: string;
+    periodEnd: string;
+    data: unknown;
+  }): { id: string; createdAt: string } {
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO report_snapshots
+           (id, patient_id, created_by_user_id, period_start, period_end, data_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        params.patientId,
+        params.createdByUserId,
+        params.periodStart,
+        params.periodEnd,
+        JSON.stringify(params.data),
+        createdAt,
+      );
+    return { id, createdAt };
+  }
+
+  listReportSnapshots(patientId: string, limit = 50): Array<{
+    id: string;
+    patient_id: string;
+    created_by_user_id: string;
+    period_start: string;
+    period_end: string;
+    data_json: string;
+    created_at: string;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT id, patient_id, created_by_user_id, period_start, period_end, data_json, created_at
+         FROM report_snapshots
+         WHERE patient_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
+      )
+      .all(patientId, limit) as unknown as Array<{
+      id: string;
+      patient_id: string;
+      created_by_user_id: string;
+      period_start: string;
+      period_end: string;
+      data_json: string;
+      created_at: string;
+    }>;
   }
 
   // ==========================================

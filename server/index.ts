@@ -3,10 +3,9 @@ import { join } from 'node:path';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { calculatePatientAnalytics } from './analytics.ts';
 import { authMiddleware } from './auth.ts';
 import { db } from './db.ts';
-import { createV1Router } from './routes/v1.ts';
+import { createV1Router } from './routes/v1/index.ts';
 
 export const app = express();
 const port = Number(process.env.PORT || 3001);
@@ -109,35 +108,6 @@ app.post('/api/shop/purchase', (request, response) => {
 app.put('/api/children/:id/skin', (request, response) => {
   const { skinId } = z.object({ skinId: z.string() }).parse(request.body);
   return response.json(db.selectSkin(request.params.id, skinId));
-});
-
-// ==========================================
-// СТАРЫЕ ЭНДПОИНТЫ СПЕЦИАЛИСТА (ДЛЯ UI ЭТАПА 1)
-// ==========================================
-
-app.get('/api/clinician/children', (_request, response) => {
-  const children = db.listChildren().map((child) => ({
-    ...child,
-    summary: calculatePatientAnalytics(db.listSessions(child.id), child.assignment).summary,
-  }));
-  return response.json(children);
-});
-
-app.get('/api/clinician/children/:id', (request, response) => {
-  const child = db.listChildren().find((item) => item.id === request.params.id);
-  if (!child) return response.status(404).json({ error: 'Пациент не найден' });
-  const sessions = db.listSessions(child.id);
-  const analytics = calculatePatientAnalytics(sessions, child.assignment);
-  return response.json({
-    child: { ...child, summary: analytics.summary },
-    weekly: analytics.weekly,
-    sessions,
-  });
-});
-
-app.get('/api/clinician/sessions', (request, response) => {
-  const childId = typeof request.query.childId === 'string' ? request.query.childId : undefined;
-  return response.json(db.listSessions(childId));
 });
 
 // The production process can serve the compiled client as a single local service.

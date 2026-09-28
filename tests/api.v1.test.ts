@@ -6,7 +6,7 @@ import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { authMiddleware } from '../server/auth.ts';
 import { AppDatabase } from '../server/db.ts';
-import { createV1Router } from '../server/routes/v1.ts';
+import { createV1Router } from '../server/routes/v1/index.ts';
 
 let server: Server;
 let baseUrl = '';
@@ -177,18 +177,20 @@ describe('API v1: Изоляция пациентов и назначения', 
   });
 
   it('GET /api/v1/patients — список пациентов с агрегированной аналитикой', async () => {
-    const res = await fetch(`${baseUrl}/patients`, {
+    const res = await fetch(`${baseUrl}/patients?pageSize=50`, {
       headers: { Authorization: `Bearer ${doctorToken}` },
     });
     expect(res.status).toBe(200);
-    const patients = (await res.json()) as any[];
-    expect(Array.isArray(patients)).toBe(true);
-    expect(patients.length).toBeGreaterThanOrEqual(5);
+    const body = (await res.json()) as any;
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.total).toBeGreaterThanOrEqual(5);
+    expect(body.page).toBe(1);
 
-    const first = patients[0];
+    const first = body.items[0];
     expect(first).toHaveProperty('id');
     expect(first).toHaveProperty('pseudonym');
     expect(first).toHaveProperty('summary');
+    expect(first).toHaveProperty('attention');
     expect(first.summary).toHaveProperty('adherencePercent');
   });
 

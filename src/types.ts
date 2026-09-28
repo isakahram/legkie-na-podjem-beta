@@ -22,10 +22,8 @@ export interface SessionPayload {
   technicalPauses: number; status: 'completed' | 'stopped'; inputMode: 'microphone' | 'demo';
 }
 export interface SessionRecord extends SessionPayload { id: string; childNickname?: string; }
-export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
+export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; averageBreathDuration?: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
 export interface PatientSummary { sessionsThisWeek: number; targetSessions: number; adherencePercent: number; averageCorrectPercent: number; averageBreathDuration: number | null; bestDuration?: number | null; averageStability: number | null; averageSessionDuration: number; breathCompletionPercent: number; cycleCompletionPercent?: number; missedThisWeek: number; lastSessionAt: string | null; trendPercent: number; }
-export interface ClinicianChild extends ChildProfile { code: string; summary: PatientSummary; }
-export interface PatientDetail { child: ClinicianChild; weekly: WeeklyPoint[]; sessions: SessionRecord[]; }
 export interface ApiErrorBody { error: string; details?: unknown; }
 
 // ==========================================
@@ -42,6 +40,10 @@ export interface UserDto {
   organizationName?: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  displayName?: string | null;
+  clinicName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
 }
 
 export interface AuthResponse {
@@ -98,8 +100,239 @@ export interface PatientListItemDto {
 }
 
 export interface PatientV1DetailDto {
-  patient: PatientListItemDto;
+  patient: PatientListItemWithAttention;
   weekly: WeeklyPoint[];
   sessions: SessionRecord[];
   assignments: AssignmentVersionDto[];
+}
+
+// ==========================================
+// DTOs ПОДЭТАПА 2.2 — ПРОДУКТОВЫЙ КАБИНЕТ
+// ==========================================
+
+export type AttentionReasonCode =
+  | 'no_sessions'
+  | 'long_gap'
+  | 'declining_trend'
+  | 'low_adherence';
+
+export interface AttentionReason {
+  code: AttentionReasonCode;
+  label: string;
+  severity: 'warning' | 'critical';
+  /** Числовое значение, из-за которого сработало правило (дни, проценты). */
+  value: number | null;
+}
+
+export interface PatientAttention {
+  needsAttention: boolean;
+  reasons: AttentionReason[];
+  daysSinceLastSession: number | null;
+}
+
+export interface AttentionThresholds {
+  /** Сколько дней без занятий считается пропуском. */
+  missedDays: number;
+  /** Падение динамики в процентах, начиная с которого это ухудшение. */
+  declinePercent: number;
+  /** Минимально допустимая регулярность за неделю, %. */
+  minAdherencePercent: number;
+}
+
+export type DashboardPeriod = 'week' | 'month' | '8weeks';
+
+export interface DashboardKpi {
+  activePatients: number;
+  totalPatients: number;
+  sessionsInPeriod: number;
+  targetSessionsInPeriod: number;
+  averageAdherencePercent: number;
+  missedSessions: number;
+  attentionCount: number;
+}
+
+export interface DashboardSeriesPoint {
+  week: string;
+  label: string;
+  sessions: number;
+  target: number;
+}
+
+export interface DashboardAttentionItem {
+  patientId: string;
+  pseudonym: string;
+  avatar: string;
+  reasons: AttentionReason[];
+  daysSinceLastSession: number | null;
+}
+
+export interface DashboardRecentSession {
+  id: string;
+  patientId: string;
+  pseudonym: string;
+  startedAt: string;
+  durationSeconds: number;
+  completedBreaths: number;
+  targetBreaths: number;
+  averageStability: number | null;
+}
+
+export interface DashboardDto {
+  period: DashboardPeriod;
+  generatedAt: string;
+  kpi: DashboardKpi;
+  series: DashboardSeriesPoint[];
+  attention: DashboardAttentionItem[];
+  recentSessions: DashboardRecentSession[];
+}
+
+export interface PatientListItemWithAttention extends PatientListItemDto {
+  attention: PatientAttention;
+}
+
+export interface PatientListResponse {
+  items: PatientListItemWithAttention[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export type PatientsFilter = 'all' | 'active' | 'missed' | 'declining' | 'attention';
+export type PatientsSort = 'lastSession' | 'adherence' | 'age' | 'pseudonym';
+
+export interface PatientsQuery {
+  search?: string;
+  filter?: PatientsFilter;
+  sort?: PatientsSort;
+  direction?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CreatePatientInput {
+  pseudonym: string;
+  age: number;
+  gender: 'male' | 'female' | 'unspecified';
+}
+
+export interface SpecialistProfileDto {
+  displayName: string | null;
+  clinicName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+
+export interface AssignmentDefaults {
+  sessionsPerWeek: number;
+  targetBreaths: number;
+  minCompletedBreathSeconds: number;
+}
+
+export interface NotificationPrefs {
+  emailAlerts: boolean;
+  weeklyReport: boolean;
+  missedDaysThreshold: number;
+  declineTrendPercent: number;
+}
+
+export interface AuthSessionDto {
+  id: string;
+  createdAt: string;
+  lastActiveAt: string;
+  expiresAt: string;
+  userAgent: string | null;
+  ip: string | null;
+  current: boolean;
+}
+
+// ==========================================
+// КАРТОЧКА РЕБЁНКА: АНАЛИТИКА, СЕССИИ, ОТЧЁТЫ
+// ==========================================
+
+export interface PeriodMetrics {
+  from: string;
+  to: string;
+  sessions: number;
+  averageBreathDuration: number | null;
+  averageStability: number | null;
+  averageSessionDuration: number;
+  totalBreaths: number;
+  adherencePercent: number;
+}
+
+export interface PeriodComparison {
+  current: PeriodMetrics;
+  previous: PeriodMetrics;
+  /** Изменение в процентах по каждому показателю; null — не с чем сравнивать. */
+  delta: {
+    sessions: number | null;
+    averageBreathDuration: number | null;
+    averageStability: number | null;
+    totalBreaths: number | null;
+    adherencePercent: number | null;
+  };
+}
+
+export interface PlanFactPoint {
+  week: string;
+  label: string;
+  factSessions: number;
+  planSessions: number;
+  factBreaths: number;
+  planBreaths: number;
+}
+
+export interface PatientAnalyticsDto {
+  weekly: WeeklyPoint[];
+  planFact: PlanFactPoint[];
+  comparison: PeriodComparison;
+}
+
+export interface SessionsQuery {
+  patientId?: string;
+  from?: string;
+  to?: string;
+  minDurationSeconds?: number;
+  maxDurationSeconds?: number;
+  minBreaths?: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SessionsResponse {
+  items: SessionRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ReportSummary {
+  periodStart: string;
+  periodEnd: string;
+  sessions: number;
+  averageAdherencePercent: number;
+  averageSessionDuration: number;
+  averageBreathDuration: number | null;
+  averageStability: number | null;
+  totalBreaths: number;
+  trendPercent: number;
+  weekly: WeeklyPoint[];
+}
+
+export interface ReportSnapshotDto {
+  id: string;
+  patientId: string;
+  createdByUserId: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  data: ReportSummary;
+}
+
+export interface SpecialistSettingsDto {
+  profile: SpecialistProfileDto;
+  notifications: NotificationPrefs;
+  assignmentDefaults: AssignmentDefaults;
+  attentionThresholds: AttentionThresholds;
+  updatedAt: string | null;
 }

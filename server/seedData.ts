@@ -19,18 +19,22 @@ export function seedDatabase(db: DatabaseSync): void {
 
   // 3. Пользователи: admin, specialist, demo_specialist
   const userStmt = db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, password_hash, role, organization_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO users
+      (id, email, password_hash, role, organization_id, created_at, display_name, clinic_name, contact_email)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   // Пароли по умолчанию для сида (в проде меняются при первом входе / инициализации)
   const adminHash = hashPassword('AdminPass123!');
   const doctorHash = hashPassword('DoctorPass123!');
   const demoHash = hashPassword('DemoPass123!');
+  const specialistHash = hashPassword('SpecialistPass123!');
+  const clinic = 'Детский пульмонологический центр';
 
-  userStmt.run('user-admin', 'admin@legkie.local', adminHash, 'admin', 'org-demo', '2026-01-01T00:00:00.000Z');
-  userStmt.run('user-doctor', 'doctor@legkie.local', doctorHash, 'specialist', 'org-demo', '2026-01-01T00:00:00.000Z');
-  userStmt.run('user-demo', 'demo@legkie.local', demoHash, 'demo_specialist', 'org-demo', '2026-01-01T00:00:00.000Z');
+  userStmt.run('user-admin', 'admin@legkie.local', adminHash, 'admin', 'org-demo', '2026-01-01T00:00:00.000Z', 'Администратор системы', clinic, 'admin@legkie.local');
+  userStmt.run('user-doctor', 'doctor@legkie.local', doctorHash, 'specialist', 'org-demo', '2026-01-01T00:00:00.000Z', 'Анна Викторовна', clinic, 'doctor@legkie.local');
+  userStmt.run('user-demo', 'demo@legkie.local', demoHash, 'demo_specialist', 'org-demo', '2026-01-01T00:00:00.000Z', 'Ознакомительный доступ', clinic, null);
+  userStmt.run('user-maria', 'maria@legkie.local', specialistHash, 'specialist', 'org-demo', '2026-02-01T00:00:00.000Z', 'Мария Сергеевна Орлова', 'Детская клиника «Вдох»', 'maria@legkie.local');
 
   // Настройки специалиста
   db.prepare(`
@@ -42,6 +46,17 @@ export function seedDatabase(db: DatabaseSync): void {
     JSON.stringify({ minBreathSeconds: 1.5, targetBreaths: 8, sessionsPerWeek: 3 }),
     JSON.stringify({ emailAlerts: true, weeklyReport: true }),
     '2026-01-01T00:00:00.000Z',
+  );
+
+  db.prepare(`
+    INSERT OR IGNORE INTO specialist_settings (id, user_id, default_thresholds_json, notification_prefs_json, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    'settings-maria',
+    'user-maria',
+    JSON.stringify({ minBreathSeconds: 1.5, targetBreaths: 8, sessionsPerWeek: 3 }),
+    JSON.stringify({ emailAlerts: true, weeklyReport: true, missedDaysThreshold: 3, declineTrendPercent: -10 }),
+    '2026-02-01T00:00:00.000Z',
   );
 
   // Legacy-врач для обратной совместимости
@@ -428,5 +443,72 @@ export function seedDatabase(db: DatabaseSync): void {
         }
       }
     }
+  });
+
+  // 6. Пациенты второго специалиста (Мария Сергеевна) — отдельный набор доступов.
+  //    Нужен, чтобы изоляция через patient_access была видна и в интерфейсе, и в тестах.
+  const mariaPatients = [
+    { id: 'patient-maria-stable', code: 'ОБЛАКО6', pseudonym: 'Артём Л.', age: 8, gender: 'male', avatar: 'АЛ', balance: 52, skin: 'ocean', sessionsPerWeek: 3, targetBreaths: 8, weeks: [3, 3, 3, 3, 3, 3, 3, 2], baseStability: 76, baseBreath: 3.0, baseCorrect: 88, growth: 0.4 },
+    { id: 'patient-maria-gap', code: 'ЛИСТИК7', pseudonym: 'Вера Н.', age: 7, gender: 'female', avatar: 'ВН', balance: 19, skin: 'berry', sessionsPerWeek: 4, targetBreaths: 8, weeks: [3, 3, 2, 3, 2, 1, 1, 0], baseStability: 64, baseBreath: 2.3, baseCorrect: 74, growth: 0.1 },
+    { id: 'patient-maria-growth', code: 'КОМЕТА8', pseudonym: 'Кирилл Ж.', age: 10, gender: 'male', avatar: 'КЖ', balance: 61, skin: 'mint', sessionsPerWeek: 3, targetBreaths: 10, weeks: [1, 2, 2, 3, 3, 3, 4, 3], baseStability: 58, baseBreath: 2.0, baseCorrect: 68, growth: 1.1 },
+    { id: 'patient-maria-start', code: 'ЗЕРНО9', pseudonym: 'Ника Т.', age: 6, gender: 'female', avatar: 'НТ', balance: 8, skin: 'sunny', sessionsPerWeek: 3, targetBreaths: 6, weeks: [0, 0, 0, 0, 0, 0, 2, 2], baseStability: 55, baseBreath: 1.8, baseCorrect: 65, growth: 0.6 },
+  ] as const;
+
+  const clampPercent = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
+
+  mariaPatients.forEach((patient) => {
+    insertPatientStmt.run(patient.id, patient.pseudonym, patient.age, patient.gender, patient.avatar, patient.balance, patient.skin, '2026-02-01T00:00:00.000Z');
+    insertCodeStmt.run(`code-${patient.id}`, patient.id, patient.code, '2026-02-01T00:00:00.000Z');
+    insertAssignStmt.run(
+      `assign-${patient.id}`,
+      patient.id,
+      'user-maria',
+      patient.sessionsPerWeek,
+      patient.targetBreaths,
+      1.5,
+      2.0,
+      4.0,
+      '2026-02-01T00:00:00.000Z',
+      'Назначение лечащего специалиста',
+      '2026-02-01T00:00:00.000Z',
+    );
+    insertSkinStmt.run(patient.id, 'berry', '2026-02-01T00:00:00.000Z');
+    if (patient.skin !== 'berry') insertSkinStmt.run(patient.id, patient.skin, '2026-02-01T00:00:00.000Z');
+
+    // Доступ только у Марии: ни у user-doctor, ни у демо-пользователя его нет.
+    insertAccessStmt.run(`acc-maria-${patient.id}`, 'user-maria', patient.id, '2026-02-01T00:00:00.000Z', 'user-admin');
+
+    patient.weeks.forEach((count, weekIdx) => {
+      const weekStart = startOfWeek(subWeeks(now, 7 - weekIdx), { weekStartsOn: 1 });
+      for (let s = 0; s < count; s += 1) {
+        const date = setHours(addDays(weekStart, s * 2), 16 + (s % 3));
+        if (date > now) continue;
+        const stability = clampPercent(patient.baseStability + weekIdx * patient.growth + s);
+        const correct = clampPercent(patient.baseCorrect + weekIdx * patient.growth * 1.5 + s);
+        const completed = Math.max(2, patient.targetBreaths - ((weekIdx + s) % 3));
+        insertSessionStmt.run(
+          `sess-${patient.id}-${weekIdx}-${s}`,
+          patient.id,
+          date.toISOString(),
+          520 + weekIdx * 12 + s * 9,
+          completed,
+          0.5 + weekIdx * 0.01,
+          Number((patient.baseBreath + weekIdx * 0.08 + s * 0.05).toFixed(2)),
+          Number((patient.baseBreath + 0.9 + weekIdx * 0.1).toFixed(2)),
+          stability,
+          correct,
+          completed,
+          patient.targetBreaths,
+          4 + s * 2,
+          60 + s * 4,
+          95 + s * 6,
+          0,
+          0,
+          0,
+          'completed',
+          'microphone',
+        );
+      }
+    });
   });
 }
