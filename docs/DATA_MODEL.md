@@ -79,7 +79,7 @@
 Профили пациентов. Не содержат ФИО, даты рождения, диагнозов и контактов родителей (принцип минимизации 152-ФЗ).
 * `id` `TEXT PRIMARY KEY` — UUID / строковый ID пациента;
 * `pseudonym` `TEXT NOT NULL` — псевдоним пациента (например, «Миша К.», «Тимофей Р.»);
-* `age` `INTEGER NOT NULL CHECK(age BETWEEN 3 AND 17)` — возраст ребёнка;
+* `age` `INTEGER NOT NULL CHECK(age BETWEEN 5 AND 12)` — возраст ребёнка (целевая группа 5–10 лет);
 * `gender` `TEXT CHECK(gender IN ('male', 'female', 'unspecified'))` — пол (справочно для калибровочных норм);
 * `avatar` `TEXT NOT NULL` — двухбуквенная плашка аватара (например, «МК», «СП»);
 * `balance` `INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0)` — баланс собранных в игре монет;

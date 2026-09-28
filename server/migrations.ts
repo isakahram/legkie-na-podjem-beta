@@ -46,7 +46,7 @@ const MIGRATIONS: Migration[] = [
         CREATE TABLE IF NOT EXISTS patients (
           id TEXT PRIMARY KEY,
           pseudonym TEXT NOT NULL,
-          age INTEGER NOT NULL CHECK(age BETWEEN 3 AND 17),
+          age INTEGER NOT NULL CHECK(age BETWEEN 5 AND 12),
           gender TEXT CHECK(gender IN ('male', 'female', 'unspecified')),
           avatar TEXT NOT NULL,
           balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),

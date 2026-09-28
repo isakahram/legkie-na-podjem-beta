@@ -113,4 +113,15 @@ describe('Демо-данные: 5 клинических сценариев н�
     );
     expect(daysSinceLast).toBeGreaterThanOrEqual(20);
   });
+
+  it('все демо-пациенты соответствуют возрастной группе 5–10 лет', () => {
+    const db = new AppDatabase(dbPath);
+    const children = db.listChildren();
+    expect(children.length).toBeGreaterThanOrEqual(9);
+
+    for (const child of children) {
+      expect(child.age).toBeGreaterThanOrEqual(5);
+      expect(child.age).toBeLessThanOrEqual(10);
+    }
+  });
 });
