@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { addDays, differenceInCalendarDays, parseISO, setHours, startOfWeek, subWeeks } from 'date-fns';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { SKIN_CATALOG } from '../src/skins/catalog.ts';
 import type {
   CalibrationProfile,
@@ -11,302 +11,459 @@ import type {
   SessionRecord,
   Skin,
 } from '../src/types.ts';
+import { runMigrations } from './migrations.ts';
+import { seedDatabase } from './seedData.ts';
 
-interface ChildRow {
+export interface UserRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  role: 'admin' | 'specialist' | 'demo_specialist';
+  organization_id: string | null;
+  organization_name?: string | null;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface AuthSessionRow {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+  last_active_at: string;
+  user_agent: string | null;
+  ip: string | null;
+  user_email?: string;
+  user_role?: 'admin' | 'specialist' | 'demo_specialist';
+  organization_id?: string | null;
+  organization_name?: string | null;
+}
+
+export interface PatientRow {
   id: string;
   code: string;
-  nickname: string;
+  pseudonym: string;
   age: number;
+  gender: string | null;
   avatar: string;
   balance: number;
   selected_skin: string;
+  created_at: string;
   sessions_per_week: number;
-  cycles_per_session: number;
-  recommended_duration_seconds: number;
+  target_breaths: number;
+  min_completed_breath_seconds: number;
+  target_breath_duration_min: number | null;
+  target_breath_duration_max: number | null;
+  valid_from: string;
+  note: string | null;
 }
 
-interface SessionRow {
+export interface AssignmentVersionRow {
   id: string;
-  child_id: string;
-  started_at: string;
-  duration_seconds: number;
-  breath_count: number;
-  average_strength: number;
-  average_breath_duration: number | null;
-  best_duration_seconds: number | null;
-  correct_breath_percent: number;
-  completed_cycles: number;
-  target_cycles: number;
-  coins_collected: number;
-  average_stability: number | null;
-  average_latency_ms: number | null;
-  max_latency_ms: number | null;
-  suspicious_events: number;
-  status: 'completed' | 'stopped';
-  input_mode: 'microphone' | 'demo';
-  child_nickname?: string;
+  patient_id: string;
+  created_by_user_id: string | null;
+  sessions_per_week: number;
+  target_breaths: number;
+  min_completed_breath_seconds: number;
+  target_breath_duration_min: number | null;
+  target_breath_duration_max: number | null;
+  valid_from: string;
+  valid_until: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface AuditEventRow {
+  id: string;
+  user_id: string | null;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  details: string | null;
+  ip: string | null;
+  created_at: string;
 }
 
 const defaultPath = join(process.cwd(), 'data', 'legkie.sqlite');
 
-/**
- * Актуальная схема сессий. Метрики, которых не было в старых записях,
- * допускают NULL: для таких сессий API возвращает null, а не 0.
- * Колонка obstacles_avoided сохранена ради безопасной миграции, но
- * не читается и не попадает в DTO.
- */
-const SESSIONS_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
-    started_at TEXT NOT NULL,
-    duration_seconds INTEGER NOT NULL,
-    breath_count INTEGER NOT NULL,
-    average_strength REAL NOT NULL,
-    average_breath_duration REAL,
-    best_duration_seconds REAL,
-    average_stability REAL,
-    correct_breath_percent REAL NOT NULL,
-    completed_cycles INTEGER NOT NULL,
-    target_cycles INTEGER NOT NULL,
-    coins_collected INTEGER NOT NULL,
-    average_latency_ms REAL,
-    max_latency_ms REAL,
-    obstacles_avoided INTEGER DEFAULT 0,
-    suspicious_events INTEGER NOT NULL DEFAULT 0,
-    status TEXT NOT NULL CHECK(status IN ('completed', 'stopped')),
-    input_mode TEXT NOT NULL CHECK(input_mode IN ('microphone', 'demo'))
-  );
-`;
-
-/** Поля сессии, читаемые из БД. SELECT * не используется намеренно. */
-const SESSION_FIELDS = [
-  's.id', 's.child_id', 's.started_at', 's.duration_seconds', 's.breath_count',
-  's.average_strength', 's.average_breath_duration', 's.best_duration_seconds', 's.average_stability',
-  's.correct_breath_percent', 's.completed_cycles', 's.target_cycles',
-  's.coins_collected', 's.average_latency_ms', 's.max_latency_ms',
-  's.suspicious_events', 's.status', 's.input_mode',
-].join(', ');
-
-const CHILD_FIELDS = [
-  'c.id', 'c.code', 'c.nickname', 'c.age', 'c.avatar', 'c.balance', 'c.selected_skin',
-].join(', ');
-
-
-
 export class AppDatabase {
-  private readonly db: DatabaseSync;
+  readonly db: DatabaseSync;
 
   constructor(path = defaultPath) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
-    this.migrate();
-    this.migrateSessions();
-    this.seed();
+    runMigrations(this.db);
+    seedDatabase(this.db);
   }
 
-  private migrate(): void {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS clinicians (
-        id TEXT PRIMARY KEY,
-        display_name TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS children (
-        id TEXT PRIMARY KEY,
-        clinician_id TEXT NOT NULL REFERENCES clinicians(id),
-        code TEXT NOT NULL UNIQUE,
-        nickname TEXT NOT NULL,
-        age INTEGER NOT NULL CHECK(age BETWEEN 3 AND 17),
-        avatar TEXT NOT NULL,
-        balance INTEGER NOT NULL DEFAULT 0 CHECK(balance >= 0),
-        selected_skin TEXT NOT NULL DEFAULT 'berry'
-      );
-      CREATE TABLE IF NOT EXISTS assignments (
-        child_id TEXT PRIMARY KEY REFERENCES children(id) ON DELETE CASCADE,
-        sessions_per_week INTEGER NOT NULL,
-        cycles_per_session INTEGER NOT NULL,
-        recommended_duration_seconds INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS skins (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        color TEXT NOT NULL,
-        accent TEXT NOT NULL,
-        price INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS child_skins (
-        child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
-        skin_id TEXT NOT NULL REFERENCES skins(id),
-        PRIMARY KEY (child_id, skin_id)
-      );
-      CREATE TABLE IF NOT EXISTS calibrations (
-        id TEXT PRIMARY KEY,
-        child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
-        ambient_rms REAL NOT NULL,
-        breath_rms REAL NOT NULL,
-        breath_zcr REAL NOT NULL,
-        breath_centroid REAL NOT NULL,
-        breath_flatness REAL NOT NULL,
-        quality REAL NOT NULL,
-        created_at TEXT NOT NULL
-      );
-      ${SESSIONS_TABLE_SQL}
-      CREATE INDEX IF NOT EXISTS idx_sessions_child_date ON sessions(child_id, started_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_calibrations_child_date ON calibrations(child_id, created_at DESC);
-    `);
+  // ==========================================
+  // АУТЕНТИФИКАЦИЯ И ПОЛЬЗОВАТЕЛИ
+  // ==========================================
+
+  findUserByEmail(email: string): UserRow | null {
+    const row = this.db
+      .prepare(
+        `SELECT u.id, u.email, u.password_hash, u.role, u.organization_id,
+                o.name AS organization_name, u.created_at, u.last_login_at
+         FROM users u
+         LEFT JOIN organizations o ON o.id = u.organization_id
+         WHERE LOWER(u.email) = LOWER(?)`,
+      )
+      .get(email.trim()) as UserRow | undefined;
+    return row ?? null;
   }
 
+  findUserById(id: string): UserRow | null {
+    const row = this.db
+      .prepare(
+        `SELECT u.id, u.email, u.password_hash, u.role, u.organization_id,
+                o.name AS organization_name, u.created_at, u.last_login_at
+         FROM users u
+         LEFT JOIN organizations o ON o.id = u.organization_id
+         WHERE u.id = ?`,
+      )
+      .get(id) as UserRow | undefined;
+    return row ?? null;
+  }
 
-  /**
-   * Пересобирает таблицу сессий, если она создана до появления новых метрик.
-   * Старые записи переносятся как есть, новые колонки остаются NULL.
-   */
-  private migrateSessions(): void {
-    const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>;
-    if (columns.length === 0) return;
-    if (columns.some((column) => column.name === 'average_stability') && !columns.some((column) => column.name === 'best_duration_seconds')) {
-      this.db.exec('ALTER TABLE sessions ADD COLUMN best_duration_seconds REAL');
-      return;
+  updateUserLastLogin(userId: string, timestamp = new Date().toISOString()): void {
+    this.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(timestamp, userId);
+  }
+
+  updateUserPassword(userId: string, passwordHash: string): void {
+    this.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId);
+  }
+
+  createAuthSession(params: {
+    userId: string;
+    tokenHash: string;
+    expiresAt: string;
+    userAgent?: string | null;
+    ip?: string | null;
+  }): { id: string } {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO auth_sessions
+          (id, user_id, token_hash, expires_at, created_at, last_active_at, user_agent, ip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        params.userId,
+        params.tokenHash,
+        params.expiresAt,
+        now,
+        now,
+        params.userAgent ?? null,
+        params.ip ?? null,
+      );
+    return { id };
+  }
+
+  getAuthSessionByTokenHash(tokenHash: string, now = new Date().toISOString()): (AuthSessionRow & { user: UserRow }) | null {
+    const row = this.db
+      .prepare(
+        `SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.created_at, s.last_active_at,
+                s.user_agent, s.ip,
+                u.email AS user_email, u.role AS user_role, u.password_hash,
+                u.organization_id, o.name AS organization_name,
+                u.created_at AS user_created_at, u.last_login_at AS user_last_login_at
+         FROM auth_sessions s
+         JOIN users u ON u.id = s.user_id
+         LEFT JOIN organizations o ON o.id = u.organization_id
+         WHERE s.token_hash = ? AND s.expires_at > ?`,
+      )
+      .get(tokenHash, now) as
+      | (AuthSessionRow & {
+          password_hash: string;
+          user_created_at: string;
+          user_last_login_at?: string | null;
+        })
+      | undefined;
+
+    if (!row) return null;
+    return {
+      id: row.id,
+      user_id: row.user_id,
+      token_hash: row.token_hash,
+      expires_at: row.expires_at,
+      created_at: row.created_at,
+      last_active_at: row.last_active_at,
+      user_agent: row.user_agent,
+      ip: row.ip,
+      user: {
+        id: row.user_id,
+        email: row.user_email!,
+        password_hash: row.password_hash,
+        role: row.user_role!,
+        organization_id: row.organization_id ?? null,
+        organization_name: row.organization_name ?? null,
+        created_at: row.user_created_at,
+        last_login_at: row.user_last_login_at ?? null,
+      },
+    };
+  }
+
+  touchAuthSession(sessionId: string): void {
+    this.db
+      .prepare("UPDATE auth_sessions SET last_active_at = datetime('now') WHERE id = ?")
+      .run(sessionId);
+  }
+
+  deleteAuthSession(sessionId: string): void {
+    this.db.prepare('DELETE FROM auth_sessions WHERE id = ?').run(sessionId);
+  }
+
+  deleteUserAuthSessions(userId: string): void {
+    this.db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(userId);
+  }
+
+  // ==========================================
+  // ДОСТУП СПЕЦИАЛИСТА К ПАЦИЕНТАМ
+  // ==========================================
+
+  hasPatientAccess(userId: string, patientId: string): boolean {
+    const user = this.findUserById(userId);
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    const access = this.db
+      .prepare('SELECT 1 FROM patient_access WHERE user_id = ? AND patient_id = ?')
+      .get(userId, patientId);
+    return Boolean(access);
+  }
+
+  listPatientsForUser(userId: string): Array<{
+    id: string;
+    pseudonym: string;
+    code: string;
+    age: number;
+    gender: string | null;
+    avatar: string;
+    balance: number;
+    selectedSkin: string;
+    createdAt: string;
+    assignment: {
+      sessionsPerWeek: number;
+      targetBreaths: number;
+      minCompletedBreathSeconds: number;
+      targetBreathDurationMin: number | null;
+      targetBreathDurationMax: number | null;
+      validFrom: string;
+      note: string | null;
+    };
+  }> {
+    const user = this.findUserById(userId);
+    if (!user) return [];
+
+    let rows: PatientRow[];
+    if (user.role === 'admin') {
+      rows = this.db
+        .prepare(
+          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at,
+                  COALESCE(gac.code, '') AS code,
+                  COALESCE(av.sessions_per_week, 3) AS sessions_per_week,
+                  COALESCE(av.target_breaths, 8) AS target_breaths,
+                  COALESCE(av.min_completed_breath_seconds, 1.5) AS min_completed_breath_seconds,
+                  av.target_breath_duration_min,
+                  av.target_breath_duration_max,
+                  COALESCE(av.valid_from, '2026-01-01T00:00:00.000Z') AS valid_from,
+                  av.note
+           FROM patients p
+           LEFT JOIN game_access_codes gac ON gac.patient_id = p.id AND gac.is_active = 1
+           LEFT JOIN assignment_versions av ON av.id = (
+             SELECT av2.id FROM assignment_versions av2
+             WHERE av2.patient_id = p.id
+             ORDER BY av2.valid_from DESC, av2.created_at DESC
+             LIMIT 1
+           )
+           ORDER BY p.pseudonym`,
+        )
+        .all() as unknown as PatientRow[];
+    } else {
+      rows = this.db
+        .prepare(
+          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at,
+                  COALESCE(gac.code, '') AS code,
+                  COALESCE(av.sessions_per_week, 3) AS sessions_per_week,
+                  COALESCE(av.target_breaths, 8) AS target_breaths,
+                  COALESCE(av.min_completed_breath_seconds, 1.5) AS min_completed_breath_seconds,
+                  av.target_breath_duration_min,
+                  av.target_breath_duration_max,
+                  COALESCE(av.valid_from, '2026-01-01T00:00:00.000Z') AS valid_from,
+                  av.note
+           FROM patients p
+           JOIN patient_access pa ON pa.patient_id = p.id AND pa.user_id = ?
+           LEFT JOIN game_access_codes gac ON gac.patient_id = p.id AND gac.is_active = 1
+           LEFT JOIN assignment_versions av ON av.id = (
+             SELECT av2.id FROM assignment_versions av2
+             WHERE av2.patient_id = p.id
+             ORDER BY av2.valid_from DESC, av2.created_at DESC
+             LIMIT 1
+           )
+           ORDER BY p.pseudonym`,
+        )
+        .all(userId) as unknown as PatientRow[];
     }
-    if (columns.some((column) => column.name === 'average_stability')) return;
-    this.db.exec('BEGIN');
-    try {
-      this.db.exec('ALTER TABLE sessions RENAME TO sessions_legacy;');
-      this.db.exec(SESSIONS_TABLE_SQL);
-      this.db.exec(`
-        INSERT INTO sessions
-          (id, child_id, started_at, duration_seconds, breath_count, average_strength,
-           average_breath_duration, best_duration_seconds, correct_breath_percent, completed_cycles, target_cycles,
-           coins_collected, obstacles_avoided, suspicious_events, status, input_mode)
-        SELECT id, child_id, started_at, duration_seconds, breath_count, average_strength,
-           average_breath_duration, NULL, correct_breath_percent, completed_cycles, target_cycles,
-           coins_collected, obstacles_avoided, suspicious_events, status, input_mode
-        FROM sessions_legacy;
-      `);
-      this.db.exec('DROP TABLE sessions_legacy;');
-      this.db.exec(
-        'CREATE INDEX IF NOT EXISTS idx_sessions_child_date ON sessions(child_id, started_at DESC);',
-      );
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
+
+    return rows.map((row) => ({
+      id: row.id,
+      pseudonym: row.pseudonym,
+      code: row.code,
+      age: row.age,
+      gender: row.gender,
+      avatar: row.avatar,
+      balance: row.balance,
+      selectedSkin: row.selected_skin,
+      createdAt: row.created_at,
+      assignment: {
+        sessionsPerWeek: row.sessions_per_week,
+        targetBreaths: row.target_breaths,
+        minCompletedBreathSeconds: row.min_completed_breath_seconds,
+        targetBreathDurationMin: row.target_breath_duration_min,
+        targetBreathDurationMax: row.target_breath_duration_max,
+        validFrom: row.valid_from,
+        note: row.note,
+      },
+    }));
   }
 
-  private seed(): void {
-    const catalogStatement = this.db.prepare(
-      'INSERT OR IGNORE INTO skins (id, name, color, accent, price) VALUES (?, ?, ?, ?, ?)',
-    );
-    SKIN_CATALOG.forEach((skin) => catalogStatement.run(skin.id, skin.name, skin.color, skin.accent, skin.price));
-    const count = this.db.prepare('SELECT COUNT(*) AS count FROM children').get() as { count: number };
-    if (count.count > 0) return;
+  // ==========================================
+  // НАЗНАЧЕНИЯ (ASSIGNMENTS)
+  // ==========================================
 
-    this.db.exec('BEGIN');
-    try {
-      this.db.prepare('INSERT INTO clinicians (id, display_name) VALUES (?, ?)').run(
-        'clinician-demo',
-        'Анна Викторовна',
-      );
-      const skins = SKIN_CATALOG.map((skin) => [skin.id, skin.name, skin.color, skin.accent, skin.price] as const);
-      const skinStatement = this.db.prepare(
-        'INSERT OR IGNORE INTO skins (id, name, color, accent, price) VALUES (?, ?, ?, ?, ?)',
-      );
-      skins.forEach((skin) => skinStatement.run(...skin));
-
-      const children = [
-        ['child-luna', 'ВЕТЕР7', 'Миша К.', 7, 'МК', 28, 'berry', 3, 8, 600],
-        ['child-star', 'ЗВЕЗДА', 'Соня П.', 9, 'СП', 41, 'ocean', 4, 6, 600],
-        ['child-rain', 'РАДУГА', 'Лёва М.', 6, 'ЛМ', 16, 'sunny', 3, 10, 600],
-        ['child-cloud', 'ОБЛАКО', 'Новый участник', 7, 'ОБ', 0, 'berry', 3, 8, 600],
-      ] as const;
-      const childStatement = this.db.prepare(
-        `INSERT INTO children
-          (id, clinician_id, code, nickname, age, avatar, balance, selected_skin)
-         VALUES (?, 'clinician-demo', ?, ?, ?, ?, ?, ?)`,
-      );
-      const assignmentStatement = this.db.prepare(
-        `INSERT INTO assignments
-          (child_id, sessions_per_week, cycles_per_session, recommended_duration_seconds)
-         VALUES (?, ?, ?, ?)`,
-      );
-      const ownershipStatement = this.db.prepare(
-        'INSERT INTO child_skins (child_id, skin_id) VALUES (?, ?)',
-      );
-      children.forEach((child) => {
-        childStatement.run(...child.slice(0, 7));
-        assignmentStatement.run(child[0], child[7], child[8], child[9]);
-        ownershipStatement.run(child[0], 'berry');
-        if (child[6] !== 'berry') ownershipStatement.run(child[0], child[6]);
-      });
-
-      const patterns = [
-        [3, 2, 3, 3, 1, 3, 4, 1],
-        [3, 4, 4, 3, 4, 4, 3, 1],
-        [1, 2, 2, 3, 2, 3, 3, 1],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-      ];
-      children.forEach((child, childIndex) => {
-        patterns[childIndex].forEach((amount, patternIndex) => {
-          const weeksAgo = 7 - patternIndex;
-          const weekStart = startOfWeek(subWeeks(new Date(), weeksAgo), { weekStartsOn: 1 });
-          for (let sessionIndex = 0; sessionIndex < amount; sessionIndex += 1) {
-            const date = setHours(addDays(weekStart, Math.min(sessionIndex * 2, 5)), 17);
-            if (date > new Date()) continue;
-            const correct = Math.min(96, 68 + patternIndex * 3 + childIndex * 2 + sessionIndex);
-            const targetCycles = child[8];
-            const completedCycles = Math.max(3, targetCycles - ((sessionIndex + childIndex) % 3));
-            this.insertSession({
-              childId: child[0],
-              startedAt: date.toISOString(),
-              durationSeconds: child[9] - 8 + sessionIndex * 3,
-              breathCount: completedCycles,
-              averageStrength: 0.52 + patternIndex * 0.025,
-              averageBreathDuration: 2.1 + patternIndex * 0.12 + sessionIndex * 0.08,
-              averageStability: 62 + patternIndex * 3 + sessionIndex,
-              correctBreathPercent: correct,
-              completedCycles,
-              targetCycles,
-              coinsCollected: 4 + sessionIndex * 2,
-              averageLatencyMs: 58 + sessionIndex * 3,
-              maxLatencyMs: 96 + sessionIndex * 4,
-              technicalPauses: patternIndex < 2 && sessionIndex === 0 ? 1 : 0,
-              status: 'completed',
-              inputMode: 'microphone',
-            });
-          }
-        });
-      });
-      children.forEach((child) => this.grantProgressSkins(child[0]));
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
-  }
-
-  private childRow(idOrCode: string, byCode = false): ChildRow | undefined {
-    const key = byCode ? 'c.code' : 'c.id';
+  getPatientAssignments(patientId: string): AssignmentVersionRow[] {
     return this.db
       .prepare(
-        `SELECT ${CHILD_FIELDS}, a.sessions_per_week, a.cycles_per_session,
-                a.recommended_duration_seconds
-         FROM children c JOIN assignments a ON a.child_id = c.id
-         WHERE ${key} = ?`,
+        `SELECT id, patient_id, created_by_user_id, sessions_per_week, target_breaths,
+                min_completed_breath_seconds, target_breath_duration_min, target_breath_duration_max,
+                valid_from, valid_until, note, created_at
+         FROM assignment_versions
+         WHERE patient_id = ?
+         ORDER BY valid_from DESC, created_at DESC`,
       )
-      .get(idOrCode) as ChildRow | undefined;
+      .all(patientId) as unknown as AssignmentVersionRow[];
   }
 
-  private mapChild(row: ChildRow): ChildProfile {
+  createAssignmentVersion(params: {
+    patientId: string;
+    createdByUserId: string | null;
+    sessionsPerWeek: number;
+    targetBreaths: number;
+    minCompletedBreathSeconds: number;
+    targetBreathDurationMin: number | null;
+    targetBreathDurationMax: number | null;
+    validFrom: string;
+    note: string | null;
+  }): AssignmentVersionRow {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO assignment_versions (
+          id, patient_id, created_by_user_id, sessions_per_week, target_breaths,
+          min_completed_breath_seconds, target_breath_duration_min, target_breath_duration_max,
+          valid_from, note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        params.patientId,
+        params.createdByUserId,
+        params.sessionsPerWeek,
+        params.targetBreaths,
+        params.minCompletedBreathSeconds,
+        params.targetBreathDurationMin,
+        params.targetBreathDurationMax,
+        params.validFrom,
+        params.note,
+        now,
+      );
+
+    return {
+      id,
+      patient_id: params.patientId,
+      created_by_user_id: params.createdByUserId,
+      sessions_per_week: params.sessionsPerWeek,
+      target_breaths: params.targetBreaths,
+      min_completed_breath_seconds: params.minCompletedBreathSeconds,
+      target_breath_duration_min: params.targetBreathDurationMin,
+      target_breath_duration_max: params.targetBreathDurationMax,
+      valid_from: params.validFrom,
+      valid_until: null,
+      note: params.note,
+      created_at: now,
+    };
+  }
+
+  // ==========================================
+  // АУДИТ-ЛОГ
+  // ==========================================
+
+  logAuditEvent(event: {
+    userId: string | null;
+    action: string;
+    resourceType: string;
+    resourceId?: string | null;
+    details?: string | null;
+    ip?: string | null;
+  }): void {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO audit_events (id, user_id, action, resource_type, resource_id, details, ip, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        event.userId,
+        event.action,
+        event.resourceType,
+        event.resourceId ?? null,
+        event.details ?? null,
+        event.ip ?? null,
+        now,
+      );
+  }
+
+  listAuditEvents(limit = 100): AuditEventRow[] {
+    return this.db
+      .prepare(
+        `SELECT id, user_id, action, resource_type, resource_id, details, ip, created_at
+         FROM audit_events ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(limit) as unknown as AuditEventRow[];
+  }
+
+  // ==========================================
+  // ИГРОВЫЕ МЕТОДЫ И ОБРАТНАЯ СОВМЕСТИМОСТЬ
+  // ==========================================
+
+  private mapChild(row: {
+    id: string;
+    nickname: string;
+    age: number;
+    avatar: string;
+    balance: number;
+    selected_skin: string;
+    sessions_per_week: number;
+    cycles_per_session: number;
+    recommended_duration_seconds: number;
+  }): ChildProfile {
     const skinRows = this.db
       .prepare(
         `SELECT s.id, s.name, s.color, s.accent, s.price,
-                CASE WHEN cs.child_id IS NULL THEN 0 ELSE 1 END AS owned
-         FROM skins s LEFT JOIN child_skins cs ON cs.skin_id = s.id AND cs.child_id = ?
+                CASE WHEN ps.patient_id IS NULL THEN 0 ELSE 1 END AS owned
+         FROM skins s
+         LEFT JOIN patient_skins ps ON ps.skin_id = s.id AND ps.patient_id = ?
          ORDER BY s.price ASC`,
       )
       .all(row.id) as Array<Omit<Skin, 'owned'> & { owned: number }>;
+
     return {
       id: row.id,
       nickname: row.nickname,
@@ -325,51 +482,109 @@ export class AppDatabase {
   }
 
   findChildByCode(code: string): ChildProfile | null {
-    const row = this.childRow(code.trim().toUpperCase(), true);
+    const row = this.db
+      .prepare(
+        `SELECT c.id, c.code, c.nickname, c.age, c.avatar, c.balance, c.selected_skin,
+                a.sessions_per_week, a.cycles_per_session, a.recommended_duration_seconds
+         FROM children c
+         JOIN assignments a ON a.child_id = c.id
+         WHERE UPPER(c.code) = ?`,
+      )
+      .get(code.trim().toUpperCase()) as
+      | {
+          id: string;
+          code: string;
+          nickname: string;
+          age: number;
+          avatar: string;
+          balance: number;
+          selected_skin: string;
+          sessions_per_week: number;
+          cycles_per_session: number;
+          recommended_duration_seconds: number;
+        }
+      | undefined;
+
     return row ? this.mapChild(row) : null;
   }
 
   getChild(id: string): ChildProfile | null {
-    const row = this.childRow(id);
+    const row = this.db
+      .prepare(
+        `SELECT c.id, c.code, c.nickname, c.age, c.avatar, c.balance, c.selected_skin,
+                a.sessions_per_week, a.cycles_per_session, a.recommended_duration_seconds
+         FROM children c
+         JOIN assignments a ON a.child_id = c.id
+         WHERE c.id = ?`,
+      )
+      .get(id) as
+      | {
+          id: string;
+          code: string;
+          nickname: string;
+          age: number;
+          avatar: string;
+          balance: number;
+          selected_skin: string;
+          sessions_per_week: number;
+          cycles_per_session: number;
+          recommended_duration_seconds: number;
+        }
+      | undefined;
+
     return row ? this.mapChild(row) : null;
   }
 
   listChildren(): Array<ChildProfile & { code: string }> {
     const rows = this.db
       .prepare(
-        `SELECT ${CHILD_FIELDS}, a.sessions_per_week, a.cycles_per_session,
-                a.recommended_duration_seconds
-         FROM children c JOIN assignments a ON a.child_id = c.id ORDER BY c.nickname`,
+        `SELECT c.id, c.code, c.nickname, c.age, c.avatar, c.balance, c.selected_skin,
+                a.sessions_per_week, a.cycles_per_session, a.recommended_duration_seconds
+         FROM children c
+         JOIN assignments a ON a.child_id = c.id
+         ORDER BY c.nickname`,
       )
-      .all() as unknown as ChildRow[];
+      .all() as unknown as Array<{
+        id: string;
+        code: string;
+        nickname: string;
+        age: number;
+        avatar: string;
+        balance: number;
+        selected_skin: string;
+        sessions_per_week: number;
+        cycles_per_session: number;
+        recommended_duration_seconds: number;
+      }>;
+
     return rows.map((row) => ({ ...this.mapChild(row), code: row.code }));
   }
 
   saveCalibration(childId: string, profile: CalibrationProfile): void {
-    this.db.prepare(
-      `INSERT INTO calibrations
-       (id, child_id, ambient_rms, breath_rms, breath_zcr, breath_centroid,
-        breath_flatness, quality, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      randomUUID(),
-      childId,
-      profile.ambientRms,
-      profile.breathRms,
-      profile.breathZcr,
-      profile.breathCentroid,
-      profile.breathFlatness,
-      profile.quality,
-      profile.createdAt,
-    );
+    this.db
+      .prepare(
+        `INSERT INTO calibrations
+         (id, patient_id, ambient_rms, breath_rms, breath_zcr, breath_centroid, breath_flatness, quality, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        childId,
+        profile.ambientRms,
+        profile.breathRms,
+        profile.breathZcr,
+        profile.breathCentroid,
+        profile.breathFlatness,
+        profile.quality,
+        profile.createdAt,
+      );
   }
 
   latestCalibration(childId: string): CalibrationProfile | null {
     const row = this.db
       .prepare(
-        `SELECT ambient_rms, breath_rms, breath_zcr, breath_centroid, breath_flatness,
-                quality, created_at
-         FROM calibrations WHERE child_id = ? ORDER BY created_at DESC LIMIT 1`,
+        `SELECT ambient_rms, breath_rms, breath_zcr, breath_centroid, breath_flatness, quality, created_at
+         FROM calibrations WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1`,
       )
       .get(childId) as
       | {
@@ -382,6 +597,7 @@ export class AppDatabase {
           created_at: string;
         }
       | undefined;
+
     return row
       ? {
           ambientRms: row.ambient_rms,
@@ -397,58 +613,61 @@ export class AppDatabase {
 
   insertSession(payload: SessionPayload): SessionRecord {
     const id = randomUUID();
-    this.db.prepare(
-      `INSERT INTO sessions
-       (id, child_id, started_at, duration_seconds, breath_count, average_strength,
-        average_breath_duration, best_duration_seconds, average_stability, correct_breath_percent, completed_cycles,
-        target_cycles, coins_collected, average_latency_ms, max_latency_ms,
-        suspicious_events, status, input_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
+    const completed = payload.completedBreaths ?? payload.completedCycles ?? 0;
+    const target = payload.targetBreaths ?? payload.targetCycles ?? 8;
+
+    this.db
+      .prepare(
+        `INSERT INTO training_sessions
+         (id, patient_id, started_at, duration_seconds, breath_count, average_strength,
+          average_breath_duration, best_duration_seconds, average_stability, correct_breath_percent,
+          completed_cycles, target_cycles, coins_collected, average_latency_ms, max_latency_ms,
+          obstacles_avoided, bird_bumps, suspicious_events, status, input_mode)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        payload.childId,
+        payload.startedAt,
+        payload.durationSeconds,
+        payload.breathCount,
+        payload.averageStrength,
+        payload.averageBreathDuration,
+        payload.bestDuration ?? null,
+        payload.averageStability,
+        payload.correctBreathPercent,
+        completed,
+        target,
+        payload.coinsCollected,
+        payload.averageLatencyMs,
+        payload.maxLatencyMs,
+        0,
+        0,
+        payload.technicalPauses,
+        payload.status,
+        payload.inputMode,
+      );
+
+    return {
+      ...payload,
       id,
-      payload.childId,
-      payload.startedAt,
-      payload.durationSeconds,
-      payload.breathCount,
-      payload.averageStrength,
-      payload.averageBreathDuration,
-      payload.bestDuration ?? null,
-      payload.averageStability,
-      payload.correctBreathPercent,
-      payload.completedBreaths ?? payload.completedCycles ?? 0,
-      payload.targetBreaths ?? payload.targetCycles ?? 8,
-      payload.coinsCollected,
-      payload.averageLatencyMs,
-      payload.maxLatencyMs,
-      payload.technicalPauses,
-      payload.status,
-      payload.inputMode,
-    );
-    return { ...payload, id, completedBreaths: payload.completedBreaths ?? payload.completedCycles ?? 0, targetBreaths: payload.targetBreaths ?? payload.targetCycles ?? 8, completedCycles: payload.completedBreaths ?? payload.completedCycles ?? 0, targetCycles: payload.targetBreaths ?? payload.targetCycles ?? 8 };
+      completedBreaths: completed,
+      targetBreaths: target,
+      completedCycles: completed,
+      targetCycles: target,
+    };
   }
 
   rewardSession(childId: string, coins: number): number {
-    this.db.prepare('UPDATE children SET balance = balance + ? WHERE id = ?').run(coins, childId);
+    this.db.prepare('UPDATE patients SET balance = balance + ? WHERE id = ?').run(coins, childId);
     return this.getChild(childId)?.balance ?? 0;
   }
 
-  /**
-   * Честный прогресс для скинов-эффектов: streak дней подряд с занятием,
-   * НАКОПЛЕННОЕ число ровных выдохов по всем занятиям, число завершённых занятий.
-   * Считается только по «честным» сессиям (микрофон, статус completed) —
-   * демо-режим не должен приближать разблокировку, как и монеты.
-   *
-   * Выдохи считаются суммарно (а не за одно занятие): схема `/api/sessions`
-   * ограничивает `completedBreaths` максимумом 20 за одно занятие, поэтому
-   * порог «30 ровных выдохов» за один заход был бы физически недостижим —
-   * это была бы ложная цель. Накопительный счётчик даёт то же самое честное
-   * достижение за несколько обычных занятий.
-   */
-  private computeProgress(childId: string): { streakDays: number; totalBreaths: number; completedSessions: number } {
+  computeProgress(childId: string): { streakDays: number; totalBreaths: number; completedSessions: number } {
     const rows = this.db
       .prepare(
-        `SELECT started_at, completed_cycles FROM sessions
-         WHERE child_id = ? AND status = 'completed' AND input_mode = 'microphone'
+        `SELECT started_at, completed_cycles FROM training_sessions
+         WHERE patient_id = ? AND status = 'completed' AND input_mode = 'microphone'
          ORDER BY started_at DESC`,
       )
       .all(childId) as Array<{ started_at: string; completed_cycles: number }>;
@@ -475,17 +694,14 @@ export class AppDatabase {
     return { streakDays, totalBreaths, completedSessions };
   }
 
-  /**
-   * Автоматически выдаёт скины-эффекты, если ребёнок реально достиг условия.
-   * Ничего не выдаёт заранее и не показывает «обещание» — карточка в магазине
-   * остаётся заблокированной, пока это не будет вызвано с настоящим прогрессом.
-   */
   grantProgressSkins(childId: string): void {
     const progress = this.computeProgress(childId);
     const owned = new Set(
-      (this.db.prepare('SELECT skin_id FROM child_skins WHERE child_id = ?').all(childId) as Array<{ skin_id: string }>).map(
-        (row) => row.skin_id,
-      ),
+      (
+        this.db.prepare('SELECT skin_id FROM patient_skins WHERE patient_id = ?').all(childId) as Array<{
+          skin_id: string;
+        }>
+      ).map((row) => row.skin_id),
     );
     const progressByUnlock: Record<string, number> = {
       streak: progress.streakDays,
@@ -495,26 +711,65 @@ export class AppDatabase {
     SKIN_CATALOG.forEach((skin) => {
       if (!skin.unlock || skin.unlockTarget === undefined || owned.has(skin.id)) return;
       if ((progressByUnlock[skin.unlock] ?? 0) >= skin.unlockTarget) {
-        this.db.prepare('INSERT OR IGNORE INTO child_skins (child_id, skin_id) VALUES (?, ?)').run(childId, skin.id);
+        this.db
+          .prepare('INSERT OR IGNORE INTO patient_skins (patient_id, skin_id, unlocked_at) VALUES (?, ?, ?)')
+          .run(childId, skin.id, new Date().toISOString());
       }
     });
   }
 
   listSessions(childId?: string): SessionRecord[] {
-    const rows = (childId
-      ? this.db
-          .prepare(
-            `SELECT ${SESSION_FIELDS}, c.nickname AS child_nickname FROM sessions s
-             JOIN children c ON c.id = s.child_id WHERE s.child_id = ?
-             ORDER BY s.started_at DESC`,
-          )
-          .all(childId)
-      : this.db
-          .prepare(
-            `SELECT ${SESSION_FIELDS}, c.nickname AS child_nickname FROM sessions s
-             JOIN children c ON c.id = s.child_id ORDER BY s.started_at DESC`,
-          )
-          .all()) as unknown as SessionRow[];
+    const rows = (
+      childId
+        ? this.db
+            .prepare(
+              `SELECT s.id, s.patient_id AS child_id, s.started_at, s.duration_seconds, s.breath_count,
+                      s.average_strength, s.average_breath_duration, s.best_duration_seconds, s.average_stability,
+                      s.correct_breath_percent, s.completed_cycles, s.target_cycles,
+                      s.coins_collected, s.average_latency_ms, s.max_latency_ms,
+                      s.suspicious_events, s.status, s.input_mode,
+                      p.pseudonym AS child_nickname
+               FROM training_sessions s
+               JOIN patients p ON p.id = s.patient_id
+               WHERE s.patient_id = ?
+               ORDER BY s.started_at DESC`,
+            )
+            .all(childId)
+        : this.db
+            .prepare(
+              `SELECT s.id, s.patient_id AS child_id, s.started_at, s.duration_seconds, s.breath_count,
+                      s.average_strength, s.average_breath_duration, s.best_duration_seconds, s.average_stability,
+                      s.correct_breath_percent, s.completed_cycles, s.target_cycles,
+                      s.coins_collected, s.average_latency_ms, s.max_latency_ms,
+                      s.suspicious_events, s.status, s.input_mode,
+                      p.pseudonym AS child_nickname
+               FROM training_sessions s
+               JOIN patients p ON p.id = s.patient_id
+               ORDER BY s.started_at DESC`,
+            )
+            .all()
+    ) as unknown as Array<{
+      id: string;
+      child_id: string;
+      child_nickname?: string;
+      started_at: string;
+      duration_seconds: number;
+      breath_count: number;
+      average_strength: number;
+      average_breath_duration: number | null;
+      best_duration_seconds: number | null;
+      average_stability: number | null;
+      correct_breath_percent: number;
+      completed_cycles: number;
+      target_cycles: number;
+      coins_collected: number;
+      average_latency_ms: number | null;
+      max_latency_ms: number | null;
+      suspicious_events: number;
+      status: 'completed' | 'stopped';
+      input_mode: 'microphone' | 'demo';
+    }>;
+
     return rows.map((row) => ({
       id: row.id,
       childId: row.child_id,
@@ -523,7 +778,6 @@ export class AppDatabase {
       durationSeconds: row.duration_seconds,
       breathCount: row.breath_count,
       averageStrength: row.average_strength,
-      // Старые записи не содержат новых метрик: возвращаем null, а не 0.
       averageBreathDuration: row.average_breath_duration ?? null,
       bestDuration: row.best_duration_seconds ?? null,
       averageStability: row.average_stability ?? null,
@@ -547,12 +801,17 @@ export class AppDatabase {
     const skin = child.skins.find((item) => item.id === skinId);
     if (!skin) throw new Error('Скин не найден');
     if (skin.owned) return child;
-    if (skin.category === 'effect' || skin.price === 0) throw new Error('открывается за серию занятий, а не за монеты');
+    if (skin.category === 'effect' || skin.price === 0) {
+      throw new Error('открывается за серию занятий, а не за монеты');
+    }
     if (child.balance < skin.price) throw new Error('Пока не хватает монет');
+
     this.db.exec('BEGIN');
     try {
-      this.db.prepare('UPDATE children SET balance = balance - ? WHERE id = ?').run(skin.price, childId);
-      this.db.prepare('INSERT INTO child_skins (child_id, skin_id) VALUES (?, ?)').run(childId, skinId);
+      this.db.prepare('UPDATE patients SET balance = balance - ? WHERE id = ?').run(skin.price, childId);
+      this.db
+        .prepare('INSERT INTO patient_skins (patient_id, skin_id, unlocked_at) VALUES (?, ?, ?)')
+        .run(childId, skinId, new Date().toISOString());
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -567,7 +826,7 @@ export class AppDatabase {
     if (!child.skins.some((skin) => skin.id === skinId && skin.owned)) {
       throw new Error('Сначала открой этот образ');
     }
-    this.db.prepare('UPDATE children SET selected_skin = ? WHERE id = ?').run(skinId, childId);
+    this.db.prepare('UPDATE patients SET selected_skin = ? WHERE id = ?').run(skinId, childId);
     return this.getChild(childId)!;
   }
 }

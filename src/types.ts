@@ -27,3 +27,79 @@ export interface PatientSummary { sessionsThisWeek: number; targetSessions: numb
 export interface ClinicianChild extends ChildProfile { code: string; summary: PatientSummary; }
 export interface PatientDetail { child: ClinicianChild; weekly: WeeklyPoint[]; sessions: SessionRecord[]; }
 export interface ApiErrorBody { error: string; details?: unknown; }
+
+// ==========================================
+// DTOs ДЛЯ API V1 (КАБИНЕТ СПЕЦИАЛИСТА)
+// ==========================================
+
+export type UserRole = 'admin' | 'specialist' | 'demo_specialist';
+
+export interface UserDto {
+  id: string;
+  email: string;
+  role: UserRole;
+  organizationId: string | null;
+  organizationName?: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AuthResponse {
+  user: UserDto;
+  token: string;
+  isDemo?: boolean;
+}
+
+export interface AssignmentVersionDto {
+  id: string;
+  patient_id: string;
+  created_by_user_id: string | null;
+  sessions_per_week: number;
+  target_breaths: number;
+  min_completed_breath_seconds: number;
+  target_breath_duration_min: number | null;
+  target_breath_duration_max: number | null;
+  valid_from: string;
+  valid_until: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface CreateAssignmentInput {
+  sessionsPerWeek: number;
+  targetBreaths: number;
+  minCompletedBreathSeconds: number;
+  targetBreathDurationMin?: number | null;
+  targetBreathDurationMax?: number | null;
+  validFrom?: string;
+  note?: string | null;
+}
+
+export interface PatientListItemDto {
+  id: string;
+  pseudonym: string;
+  code: string;
+  age: number;
+  gender: string | null;
+  avatar: string;
+  balance: number;
+  selectedSkin: string;
+  createdAt: string;
+  assignment: {
+    sessionsPerWeek: number;
+    targetBreaths: number;
+    minCompletedBreathSeconds: number;
+    targetBreathDurationMin: number | null;
+    targetBreathDurationMax: number | null;
+    validFrom: string;
+    note: string | null;
+  };
+  summary: PatientSummary;
+}
+
+export interface PatientV1DetailDto {
+  patient: PatientListItemDto;
+  weekly: WeeklyPoint[];
+  sessions: SessionRecord[];
+  assignments: AssignmentVersionDto[];
+}

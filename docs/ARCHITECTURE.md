@@ -1,61 +1,110 @@
-# Архитектура и потоки данных
+# Архитектура и потоки данных платформы «Лёгкие на подъём»
 
-## Компоненты
+## Общая схема системы
 
-1. **React PWA** — единая поставка с маршрутами ребёнка и специалиста.
-2. **Web Audio pipeline** — работает только в браузере ребёнка.
-3. **Игровой движок** — чистая 2D-физика в процентах viewport, отрисовка DOM/CSS.
-4. **Express API** — Zod-валидация, ошибки в JSON, лимит body 32 КБ.
-5. **SQLite** — пациенты-псевдонимы, назначения, калибровки, сессии, скины.
-6. **Analytics** — детерминированные недельные агрегаты; demo/stopped-сессии исключаются из медицински смежных KPI.
+```mermaid
+flowchart TD
+  subgraph ClientApp ["Клиентское приложение (React PWA)"]
+    subgraph ChildContour ["Игровой контур ребёнка"]
+      AudioPipeline["Web Audio Pipeline\n(FFT / RMS / ZCR / Centroid)"]
+      Classifier["Sound Classifier\n(edge audio features)"]
+      GameEngine["2D Game Engine\n(управление шаром, сбор монет)"]
+      ChildUI["Игровой интерфейс\n(HUD, результат, магазин скинов)"]
+    end
 
-## Граница аудиоданных
+    subgraph SpecialistContour ["Контур кабинета специалиста"]
+      AuthModule["Авторизация & Сессии\n(email/пароль, демо-вход)"]
+      SpecialistUI["Кабинет врача / Дашборд\n(динамика, назначение целей, аудит)"]
+    end
+  end
 
-```text
-MediaStream
-  -> MediaStreamAudioSourceNode
-  -> AnalyserNode
-  -> Float32Array текущего кадра
-  -> AudioFeatures
-  -> SoundClassification
-  -> управление / агрегаты
+  subgraph ServerApp ["Серверный контур (Node.js / Express API)"]
+    AuthMiddleware["Auth & RBAC Middleware\n(Cookie parser, Token hash, Rate Limit)"]
+    AccessControl["Patient Access Checker\n(Изоляция 403, Demo Read-Only)"]
+    ApiV1["API v1 Endpoints\n(/api/v1/auth, /api/v1/patients, /api/v1/assignments)"]
+    LegacyApi["Игровое API & Совместимость\n(/api/child/*, /api/sessions, /api/shop/*)"]
+    AuditLogger["Audit Event Logger\n(Действия без PII)"]
+    AnalyticsEngine["Analytics Engine\n(KPI, тренды, 8 недель)"]
+  end
+
+  subgraph Storage ["Слой хранения (SQLite -> PostgreSQL Ready)"]
+    Migrations["schema_migrations\n(Идемпотентные миграции)"]
+    UsersDB["users, organizations, auth_sessions, specialist_settings"]
+    PatientsDB["patients, game_access_codes, calibrations, skins, patient_skins"]
+    ClinicalDB["assignment_versions, training_sessions, patient_access, audit_events, report_snapshots"]
+  end
+
+  AudioPipeline -->|1. Числовые признаки кадра| Classifier
+  Classifier -->|2. Классификация выдоха| GameEngine
+  GameEngine -->|3. Прогресс и монеты| ChildUI
+  ChildUI -->|4. Агрегаты сессии POST /api/sessions| LegacyApi
+
+  AuthModule -->|POST /api/v1/auth/login| AuthMiddleware
+  SpecialistUI -->|Запросы с httpOnly Cookie| AuthMiddleware
+  AuthMiddleware --> AccessControl
+  AccessControl --> ApiV1
+  ApiV1 --> AnalyticsEngine
+  ApiV1 --> AuditLogger
+
+  LegacyApi --> Storage
+  ApiV1 --> Storage
+  AuditLogger --> ClinicalDB
 ```
 
-В коде нет `MediaRecorder`, Blob с аудио, загрузки аудиокадров или таблицы для аудио. Временные PCM/FFT-массивы создаются внутри `extractAudioFeatures` и становятся доступны сборщику мусора после возврата пяти числовых признаков.
+---
 
-## Основные сущности
+## Компоненты системы
 
-- `children` — псевдоним, игровой код, возраст, баланс, выбранный скин;
-- `assignments` — сессии/неделю, циклы/сессию, ожидаемая длительность;
-- `calibrations` — только производные аудиопризнаки;
-- `sessions` — агрегаты занятия и режим ввода;
-- `skins`, `child_skins` — каталог и владение.
+1. **React 19 PWA** — единая SPA-поставка:
+   - Контур ребёнка: калибровка, 2D-игра, магазин скинов и автовыдача достижений;
+   - Контур специалиста: авторизация, демо-режим, карточки пациентов, назначения, динамика.
+2. **Web Audio Pipeline (Edge / Client-Side)**:
+   - Обработка аудиопотока в реальном времени исключительно в памяти браузера (`Float32Array`);
+   - Извлечение 5 числовых признаков: RMS, ZCR, спектральный центроид, спектральная плоскостность, crest factor;
+   - **Сырое аудио не сохраняется и не передаётся на сервер.**
+3. **Игровой движок**:
+   - 2D-физика движения шара в процентах viewport, отрисовка через DOM/CSS;
+   - Управление по целевому выдоху (`targetBreaths`), генерация волн облаков и сбор монет;
+   - Защита от накрутки: демо-сессии не дают монет и не влияют на клинические KPI.
+4. **Express API**:
+   - **API v1**: безопасность, сессии на httpOnly cookie, изоляция пациентов (`patient_access`), RBAC (`admin`, `specialist`, `demo_specialist`), версионируемые назначения (`assignment_versions`), аудит-лог (`audit_events`);
+   - **Игровой API**: обратная совместимость для входа ребёнка по коду, сохранения калибровок и сессий.
+5. **Слой данных (SQLite с готовностью к PostgreSQL)**:
+   - Идемпотентные миграции через `schema_migrations`;
+   - Строгая изоляция персональных данных (псевдонимизация);
+   - Реляционная схема из 14 нормализованных таблиц.
 
-## API MVP
+---
 
-| Метод | Маршрут | Назначение |
+## Граница аудиоданных и приватность
+
+```text
+Микрофон ребёнка (MediaStream)
+  │
+  ▼
+[AnalyserNode (FFT 2048)]
+  │
+  ▼
+[Float32Array кадр (в RAM)] ──(вычисление признаков)──> AudioFeatures { rms, zcr, centroid, flatness }
+  │                                                              │
+  ▼ (уничтожается GC)                                            ▼
+[Сырой звук стёрт]                                    [SoundClassification: kind, strength]
+                                                                 │
+                                                                 ▼
+                                                      [2D Engine & Агрегаты занятия]
+                                                                 │
+                                                                 ▼ (только агрегаты сессии)
+                                                      [POST /api/sessions: duration, avgStrength, stability]
+```
+
+---
+
+## Архитектура изоляции и безопасности (RBAC)
+
+| Роль | Права | Ограничения |
 |---|---|---|
-| GET | `/api/health` | liveness |
-| POST | `/api/child/access` | вход по коду |
-| GET | `/api/children/:id` | игровой профиль |
-| POST | `/api/calibrations` | производные признаки калибровки |
-| GET | `/api/children/:id/calibration` | последняя калибровка |
-| POST | `/api/sessions` | итог сессии |
-| POST | `/api/shop/purchase` | покупка скина |
-| PUT | `/api/children/:id/skin` | выбор скина |
-| GET | `/api/clinician/children` | список и сводки |
-| GET | `/api/clinician/children/:id` | карточка, недели и сессии |
-| GET | `/api/clinician/sessions` | журнал сессий |
+| `admin` | Управление организациями, создание специалистов, полный аудит | Не имеет прямого отношения к игровому контуру ребёнка |
+| `specialist` | Просмотр только своих пациентов (`patient_access`), создание версий назначений (`assignment_versions`), смена своего пароля | Ответ `403 Forbidden` при попытке доступа к чужому пациенту |
+| `demo_specialist` | Просмотр синтетических демо-профилей (5 сценариев) | **Строго Read-Only**: любые мутации (`POST`, `PUT`, `DELETE`, `PATCH`) блокируются с кодом `403` |
 
-## Ошибки и безопасность MVP
-
-- все входные JSON-поля проверяются Zod;
-- balance изменяется только на сервере;
-- demo-сессии не награждаются монетами и не входят в KPI;
-- SQLite работает с параметризованными запросами;
-- service worker не перехватывает `/api/*`;
-- production-аутентификация, CSRF-защита, rate limiting, security headers и аудит доступа остаются обязательными следующими шагами.
-
-## Масштабирование
-
-Для следующего контура SQLite можно заменить PostgreSQL, сохранив API-контракты. Анализ звука следует оставить edge/client-side; серверу достаточно версионированных признаков и агрегатов. Для ML-классификатора нужен отдельный model card, version field в сессии, мониторинг drift и возможность безопасного rollback.
+Все действия пользователей (вход, выход, просмотр карточки, создание назначения, неудачные попытки) фиксируются в `audit_events` без включения персональных данных (ПДн) в поле `details`.

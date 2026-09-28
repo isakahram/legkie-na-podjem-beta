@@ -4,14 +4,20 @@ import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { calculatePatientAnalytics } from './analytics.ts';
+import { authMiddleware } from './auth.ts';
 import { db } from './db.ts';
+import { createV1Router } from './routes/v1.ts';
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT || 3001);
 
 app.disable('x-powered-by');
-app.use(cors({ origin: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '32kb' }));
+app.use(authMiddleware);
+
+// Новые версионированные маршруты кабинета специалиста v1
+app.use('/api/v1', createV1Router());
 
 const codeSchema = z.object({ code: z.string().trim().min(3).max(12) });
 const calibrationSchema = z.object({
@@ -49,6 +55,10 @@ const sessionSchema = z.object({
 app.get('/api/health', (_request, response) => {
   response.json({ ok: true, service: 'legkie-na-podjem-api' });
 });
+
+// ==========================================
+// ИГРОВЫЕ МАРШРУТЫ РЕБЁНКА (ОБРАТНАЯ СОВМЕСТИМОСТЬ)
+// ==========================================
 
 app.post('/api/child/access', (request, response) => {
   const { code } = codeSchema.parse(request.body);
@@ -101,6 +111,10 @@ app.put('/api/children/:id/skin', (request, response) => {
   return response.json(db.selectSkin(request.params.id, skinId));
 });
 
+// ==========================================
+// СТАРЫЕ ЭНДПОИНТЫ СПЕЦИАЛИСТА (ДЛЯ UI ЭТАПА 1)
+// ==========================================
+
 app.get('/api/clinician/children', (_request, response) => {
   const children = db.listChildren().map((child) => ({
     ...child,
@@ -148,6 +162,8 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   return response.status(500).json({ error: message });
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`API ready at http://0.0.0.0:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`API ready at http://0.0.0.0:${port}`);
+  });
+}
