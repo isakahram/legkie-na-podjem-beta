@@ -1,5 +1,10 @@
 import type {
   ApiErrorBody,
+  AssignmentDefaults,
+  AuthSessionDto,
+  NotificationPrefs,
+  SpecialistProfileDto,
+  SpecialistSettingsDto,
   CreatePatientInput,
   DashboardDto,
   DashboardPeriod,
@@ -122,6 +127,30 @@ export const api = {
     listSessions: (query: SessionsQuery = {}) =>
       request<SessionsResponse>(`/api/v1/sessions${toQueryString(query)}`),
     getSession: (sessionId: string) => request<SessionRecord>(`/api/v1/sessions/${sessionId}`),
+
+    getSettings: () => request<SpecialistSettingsDto>('/api/v1/settings'),
+    updateProfile: (body: SpecialistProfileDto) =>
+      request<{ user: UserDto }>('/api/v1/settings/profile', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    updateNotifications: (body: NotificationPrefs) =>
+      request<NotificationPrefs>('/api/v1/settings/notifications', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    updateAssignmentDefaults: (body: AssignmentDefaults) =>
+      request<AssignmentDefaults>('/api/v1/settings/defaults', {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    exportData: () => request<unknown>('/api/v1/settings/export'),
+
+    listAuthSessions: () => request<AuthSessionDto[]>('/api/v1/auth/sessions'),
+    revokeAuthSession: (sessionId: string) =>
+      request<{ ok: true }>(`/api/v1/auth/sessions/${sessionId}`, { method: 'DELETE' }),
+    revokeAllAuthSessions: () =>
+      request<{ ok: true }>('/api/v1/auth/sessions/revoke-all', { method: 'POST' }),
 
     listReports: (patientId: string) =>
       request<ReportSnapshotDto[]>(`/api/v1/patients/${patientId}/reports`),

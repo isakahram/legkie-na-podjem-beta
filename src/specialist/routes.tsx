@@ -5,6 +5,8 @@ import { DemoEntryPage } from './pages/DemoEntryPage';
 import { LoginPage } from './pages/LoginPage';
 import { PatientDetailPage } from './pages/PatientDetailPage';
 import { PatientsPage } from './pages/PatientsPage';
+import { SessionsPage } from './pages/SessionsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 /**
  * Маршруты кабинета специалиста одним определением:
@@ -19,6 +21,8 @@ export const specialistRoutes = (
       <Route path="patients" element={<PatientsPage />} />
       <Route path="patients/:id" element={<PatientDetailPage />} />
       <Route path="patients/:id/:tab" element={<PatientDetailPage />} />
+      <Route path="sessions" element={<SessionsPage />} />
+      <Route path="settings" element={<SettingsPage />} />
     </Route>
   </>
 );

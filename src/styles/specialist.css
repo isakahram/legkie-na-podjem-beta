@@ -1267,3 +1267,80 @@
   color: var(--sp-muted);
   font-size: 0.8rem;
 }
+
+/* Журнал занятий и настройки */
+.sp-muted {
+  color: var(--sp-muted);
+}
+.sp-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.sp-form {
+  display: grid;
+  gap: 14px;
+}
+.sp-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--sp-muted);
+}
+.sp-form input[type='text'],
+.sp-form input[type='email'],
+.sp-form input[type='tel'],
+.sp-form input[type='number'],
+.sp-form input[type='password'] {
+  padding: 9px 12px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--sp-text);
+  background: #fff;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.sp-form input:focus-visible {
+  outline: none;
+  border-color: var(--sp-accent);
+  box-shadow: 0 0 0 3px rgba(56, 132, 214, 0.16);
+}
+.sp-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.93rem;
+  color: var(--sp-text);
+}
+.sp-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--sp-accent);
+}
+.sp-form__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sp-saved {
+  color: var(--sp-positive);
+  font-size: 0.88rem;
+  animation: sp-fade-in 0.25s ease;
+}
+.sp-session-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sp-border);
+}
+.sp-session-row:last-child {
+  border-bottom: none;
+}
+.sp-session-row small {
+  display: block;
+  color: var(--sp-muted);
+}

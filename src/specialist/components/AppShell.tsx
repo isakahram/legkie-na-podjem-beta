@@ -1,4 +1,4 @@
-import { Eye, LayoutDashboard, LogOut, Menu, Users } from 'lucide-react';
+import { CalendarRange, Eye, LayoutDashboard, LogOut, Menu, Settings, Users } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Brand } from '../../components/Brand';
@@ -9,6 +9,8 @@ import { useViewport } from '../hooks';
 const NAV_ITEMS = [
   { to: '/specialist', label: 'Дашборд', icon: LayoutDashboard, end: true },
   { to: '/specialist/patients', label: 'Пациенты', icon: Users, end: false },
+  { to: '/specialist/sessions', label: 'Занятия', icon: CalendarRange, end: false },
+  { to: '/specialist/settings', label: 'Настройки', icon: Settings, end: false },
 ];
 
 const formatToday = (): string =>

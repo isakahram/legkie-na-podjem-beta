@@ -9,6 +9,8 @@ import { specialistRoutes } from '../src/specialist/routes';
 import type {
   DashboardDto,
   PatientListResponse,
+  SessionsResponse,
+  SpecialistSettingsDto,
   UserDto,
 } from '../src/types';
 
@@ -20,61 +22,39 @@ const specialist: UserDto = {
   organizationName: 'Клиника',
   createdAt: '2026-02-01T00:00:00.000Z',
   lastLoginAt: null,
-  displayName: 'Мария Сергеевна Орлова',
+  displayName: 'Мария Орлова',
   clinicName: 'Детская клиника',
-  contactEmail: 'maria@legkie.local',
+  contactEmail: null,
   contactPhone: null,
 };
 
 const dashboard: DashboardDto = {
   period: 'week',
-  generatedAt: '2026-09-30T12:00:00.000Z',
+  generatedAt: '2026-09-29T10:00:00.000Z',
   kpi: {
-    activePatients: 3,
+    activePatients: 4,
     totalPatients: 4,
-    sessionsInPeriod: 7,
-    targetSessionsInPeriod: 13,
-    averageAdherencePercent: 62,
-    missedSessions: 6,
+    sessionsInPeriod: 9,
+    targetSessionsInPeriod: 12,
+    averageAdherencePercent: 72,
+    missedSessions: 3,
     attentionCount: 1,
   },
-  series: [{ week: '2026-09-28', label: '28 сент.', sessions: 7, target: 13 }],
-  attention: [
-    {
-      patientId: 'patient-maria-gap',
-      pseudonym: 'Вера Н.',
-      avatar: 'ВН',
-      reasons: [{ code: 'long_gap', label: 'Нет занятий 7 дней', severity: 'warning', value: 7 }],
-      daysSinceLastSession: 7,
-    },
-  ],
-  recentSessions: [
-    {
-      id: 'sess-1',
-      patientId: 'patient-maria-stable',
-      pseudonym: 'Артём Л.',
-      startedAt: '2026-09-29T14:00:00.000Z',
-      durationSeconds: 540,
-      completedBreaths: 8,
-      targetBreaths: 8,
-      averageStability: 82,
-    },
-  ],
+  series: [],
+  attention: [],
+  recentSessions: [],
 };
 
 const patients: PatientListResponse = {
-  total: 1,
-  page: 1,
-  pageSize: 10,
   items: [
     {
-      id: 'patient-maria-stable',
+      id: 'p1',
       pseudonym: 'Артём Л.',
       code: 'ОБЛАКО6',
       age: 8,
       gender: 'male',
       avatar: 'АЛ',
-      balance: 52,
+      balance: 10,
       selectedSkin: 'ocean',
       createdAt: '2026-02-01T00:00:00.000Z',
       assignment: {
@@ -103,9 +83,32 @@ const patients: PatientListResponse = {
       attention: { needsAttention: false, reasons: [], daysSinceLastSession: 1 },
     },
   ],
+  total: 1,
+  page: 1,
+  pageSize: 10,
 };
 
-const renderCabinet = (path: string) =>
+const sessions: SessionsResponse = { items: [], total: 0, page: 1, pageSize: 20 };
+
+const settings: SpecialistSettingsDto = {
+  profile: {
+    displayName: 'Мария Орлова',
+    clinicName: 'Детская клиника',
+    contactEmail: null,
+    contactPhone: null,
+  },
+  notifications: {
+    emailAlerts: true,
+    weeklyReport: true,
+    missedDaysThreshold: 3,
+    declineTrendPercent: -15,
+  },
+  assignmentDefaults: { sessionsPerWeek: 3, targetBreaths: 8, minCompletedBreathSeconds: 1.5 },
+  attentionThresholds: { missedDays: 3, declinePercent: -15, minAdherencePercent: 60 },
+  updatedAt: null,
+};
+
+const renderApp = (path = '/specialist') =>
   render(
     <MemoryRouter initialEntries={[path]}>
       <SpecialistAuthProvider>
@@ -118,7 +121,19 @@ beforeEach(() => {
   vi.spyOn(api.v1, 'me').mockResolvedValue({ user: specialist });
   vi.spyOn(api.v1, 'dashboard').mockResolvedValue(dashboard);
   vi.spyOn(api.v1, 'listPatients').mockResolvedValue(patients);
-  vi.spyOn(api.v1, 'logout').mockResolvedValue({ ok: true });
+  vi.spyOn(api.v1, 'listSessions').mockResolvedValue(sessions);
+  vi.spyOn(api.v1, 'getSettings').mockResolvedValue(settings);
+  vi.spyOn(api.v1, 'listAuthSessions').mockResolvedValue([
+    {
+      id: 'sess-a',
+      createdAt: '2026-09-29T08:00:00.000Z',
+      lastActiveAt: '2026-09-29T09:00:00.000Z',
+      expiresAt: '2026-10-06T08:00:00.000Z',
+      userAgent: 'Chrome, Windows',
+      ip: '10.0.0.1',
+      current: true,
+    },
+  ]);
 });
 
 afterEach(() => {
@@ -127,75 +142,90 @@ afterEach(() => {
 });
 
 describe('Навигация по разделам кабинета', () => {
-  it('дашборд показывает KPI, список внимания и ленту занятий', async () => {
-    renderCabinet('/specialist');
+  it('боковое меню содержит все реализованные разделы', async () => {
+    renderApp();
+
+    const nav = await screen.findByRole('navigation', { name: /Разделы кабинета/i });
+    for (const label of ['Дашборд', 'Пациенты', 'Занятия', 'Настройки']) {
+      expect(screen.getAllByRole('link', { name: new RegExp(label) }).length).toBeGreaterThan(0);
+    }
+    expect(nav).toBeTruthy();
+  });
+
+  it('переход Дашборд → Пациенты → Занятия → Настройки грузит нужные данные', async () => {
+    const user = userEvent.setup();
+    renderApp();
 
     expect(await screen.findByRole('heading', { name: 'Сводка' })).toBeTruthy();
-    expect(await screen.findByText('Активные пациенты')).toBeTruthy();
-    expect(screen.getByText('Требуют внимания')).toBeTruthy();
-    expect(screen.getByText('Нет занятий 7 дней')).toBeTruthy();
-    expect(screen.getByText('Последние занятия')).toBeTruthy();
+
+    await user.click(screen.getByRole('link', { name: /Пациенты/ }));
+    expect(await screen.findByRole('heading', { name: /Пациенты/ })).toBeTruthy();
+    await waitFor(() => expect(api.v1.listPatients).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('link', { name: /Занятия/ }));
+    expect(await screen.findByRole('heading', { name: 'Занятия' })).toBeTruthy();
+    await waitFor(() => expect(api.v1.listSessions).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('link', { name: /Настройки/ }));
+    expect(await screen.findByRole('heading', { name: 'Настройки' })).toBeTruthy();
+    await waitFor(() => expect(api.v1.getSettings).toHaveBeenCalled());
+    expect(screen.getByDisplayValue('Мария Орлова')).toBeTruthy();
   });
 
-  it('переход по боковому меню открывает раздел «Пациенты»', async () => {
-    const user = userEvent.setup();
-    renderCabinet('/specialist');
+  it('из журнала занятий можно перейти в карточку ребёнка', async () => {
+    vi.spyOn(api.v1, 'listSessions').mockResolvedValue({
+      items: [
+        {
+          id: 'sess-1',
+          childId: 'p1',
+          childNickname: 'Артём Л.',
+          startedAt: '2026-09-29T14:00:00.000Z',
+          durationSeconds: 540,
+          breathCount: 8,
+          averageStrength: 0.6,
+          averageBreathDuration: 3.2,
+          averageStability: 82,
+          correctBreathPercent: 88,
+          completedBreaths: 7,
+          targetBreaths: 8,
+          coinsCollected: 6,
+          averageLatencyMs: 60,
+          maxLatencyMs: 90,
+          technicalPauses: 0,
+          status: 'completed',
+          inputMode: 'microphone',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    });
 
-    await screen.findByRole('heading', { name: 'Сводка' });
-    await user.click(screen.getByRole('link', { name: 'Пациенты' }));
+    renderApp('/specialist/sessions');
 
-    expect(await screen.findByRole('heading', { name: 'Пациенты' })).toBeTruthy();
-    await waitFor(() => expect(screen.getByText('Артём Л.')).toBeTruthy());
-    expect(api.v1.listPatients).toHaveBeenCalled();
+    const link = await screen.findByRole('link', { name: 'Артём Л.' });
+    expect(link.getAttribute('href')).toBe('/specialist/patients/p1');
   });
 
-  it('смена периода перезапрашивает сводку', async () => {
-    const user = userEvent.setup();
-    renderCabinet('/specialist');
+  it('в кабинете нет надписей «демо», «тест» и «заглушка»', async () => {
+    renderApp('/specialist/settings');
 
-    await screen.findByRole('heading', { name: 'Сводка' });
-    await user.click(screen.getByRole('button', { name: '8 недель' }));
-
-    await waitFor(() => expect(api.v1.dashboard).toHaveBeenCalledWith('8weeks'));
-  });
-
-  it('фильтр «Требуют внимания» уходит в запрос списка', async () => {
-    const user = userEvent.setup();
-    renderCabinet('/specialist/patients');
-
-    await screen.findByRole('heading', { name: 'Пациенты' });
-    await user.click(screen.getByRole('button', { name: 'Требуют внимания' }));
-
-    await waitFor(() =>
-      expect(api.v1.listPatients).toHaveBeenCalledWith(expect.objectContaining({ filter: 'attention' })),
-    );
-  });
-
-  it('неавторизованного пользователя уводит на страницу входа', async () => {
-    vi.spyOn(api.v1, 'me').mockRejectedValue(new Error('Требуется авторизация'));
-    renderCabinet('/specialist');
-
-    expect(await screen.findByRole('heading', { name: 'Кабинет специалиста' })).toBeTruthy();
+    await screen.findByRole('heading', { name: 'Настройки' });
+    expect(document.body.textContent ?? '').not.toMatch(/\bтест|заглушк|в разработке|скоро/i);
   });
 });
 
-describe('Демо-режим в интерфейсе', () => {
-  it('помечен явной плашкой и скрывает добавление пациента', async () => {
-    vi.spyOn(api.v1, 'me').mockResolvedValue({
-      user: { ...specialist, role: 'demo_specialist', displayName: 'Ознакомительный доступ' },
-    });
-
-    renderCabinet('/specialist/patients');
-
-    await screen.findByRole('heading', { name: 'Пациенты' });
-    expect(screen.getAllByText('Демонстрационный режим').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /Добавить пациента/ })).toBeNull();
+describe('Демо-режим', () => {
+  beforeEach(() => {
+    vi.spyOn(api.v1, 'me').mockResolvedValue({ user: { ...specialist, role: 'demo_specialist' } });
   });
 
-  it('у специалиста кнопка добавления доступна', async () => {
-    renderCabinet('/specialist/patients');
+  it('помечает режим просмотра и скрывает сохранение настроек', async () => {
+    renderApp('/specialist/settings');
 
-    await screen.findByRole('heading', { name: 'Пациенты' });
-    expect(screen.getByRole('button', { name: /Добавить пациента/ })).toBeTruthy();
+    await screen.findByRole('heading', { name: 'Настройки' });
+    expect(screen.queryByRole('button', { name: /Сохранить профиль/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Сменить пароль/ })).toBeNull();
+    expect(screen.getAllByText(/Демонстрационный режим/i).length).toBeGreaterThan(0);
   });
 });

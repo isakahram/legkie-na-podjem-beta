@@ -389,3 +389,130 @@ describe('Аналитика, журнал занятий и отчёты кар
     expect(res.status).toBe(403);
   });
 });
+
+describe('Настройки кабинета', () => {
+  it('GET /settings — профиль, уведомления и параметры по умолчанию', async () => {
+    const res = await fetch(`${baseUrl}/settings`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.profile).toHaveProperty('displayName');
+    expect(data.notifications.missedDaysThreshold).toBeGreaterThan(0);
+    expect(data.assignmentDefaults.targetBreaths).toBeGreaterThan(0);
+  });
+
+  it('PUT /settings/profile — сохраняет профиль и возвращает пользователя', async () => {
+    const res = await fetch(
+      `${baseUrl}/settings/profile`,
+      authed(mariaToken, {
+        method: 'PUT',
+        body: JSON.stringify({
+          displayName: 'Мария Орлова',
+          clinicName: 'Центр дыхательной реабилитации',
+          contactEmail: 'maria.orlova@legkie.local',
+          contactPhone: '+7 900 000-00-00',
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).user.displayName).toBe('Мария Орлова');
+
+    const settings = (await (await fetch(`${baseUrl}/settings`, authed(mariaToken))).json()) as any;
+    expect(settings.profile.clinicName).toBe('Центр дыхательной реабилитации');
+  });
+
+  it('PUT /settings/profile — 400 при неверной почте', async () => {
+    const res = await fetch(
+      `${baseUrl}/settings/profile`,
+      authed(mariaToken, { method: 'PUT', body: JSON.stringify({ contactEmail: 'не-почта' }) }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('PUT /settings/notifications и /settings/defaults — сохраняются между запросами', async () => {
+    const notifications = {
+      emailAlerts: false,
+      weeklyReport: true,
+      missedDaysThreshold: 5,
+      declineTrendPercent: -20,
+    };
+    const defaults = { sessionsPerWeek: 4, targetBreaths: 10, minCompletedBreathSeconds: 2 };
+
+    expect(
+      (
+        await fetch(
+          `${baseUrl}/settings/notifications`,
+          authed(mariaToken, { method: 'PUT', body: JSON.stringify(notifications) }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await fetch(
+          `${baseUrl}/settings/defaults`,
+          authed(mariaToken, { method: 'PUT', body: JSON.stringify(defaults) }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const settings = (await (await fetch(`${baseUrl}/settings`, authed(mariaToken))).json()) as any;
+    expect(settings.notifications).toMatchObject(notifications);
+    expect(settings.assignmentDefaults).toMatchObject(defaults);
+  });
+
+  it('PUT /settings/* — 403 в демо-режиме', async () => {
+    for (const path of ['/settings/profile', '/settings/notifications', '/settings/defaults']) {
+      const res = await fetch(`${baseUrl}${path}`, authed(demoToken, { method: 'PUT', body: JSON.stringify({}) }));
+      expect(res.status).toBe(403);
+    }
+  });
+
+  it('GET /settings/export — выгружает только своих детей', async () => {
+    const res = await fetch(`${baseUrl}/settings/export`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.patients.length).toBeGreaterThan(0);
+    expect(data.patients[0]).toHaveProperty('sessions');
+
+    const doctorExport = (await (await fetch(`${baseUrl}/settings/export`, authed(doctorToken))).json()) as any;
+    const mine = new Set(data.patients.map((item: any) => item.pseudonym));
+    const theirs = new Set(doctorExport.patients.map((item: any) => item.pseudonym));
+    expect([...mine].some((name) => theirs.has(name))).toBe(false);
+  });
+});
+
+describe('Активные входы', () => {
+  it('GET /auth/sessions — помечает текущий вход', async () => {
+    const res = await fetch(`${baseUrl}/auth/sessions`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const sessions = (await res.json()) as any[];
+    expect(sessions.length).toBeGreaterThan(0);
+    expect(sessions.filter((item) => item.current)).toHaveLength(1);
+  });
+
+  it('DELETE /auth/sessions/:id — завершает только свой вход', async () => {
+    const extraToken = await login('maria@legkie.local', 'SpecialistPass123!');
+    const sessions = (await (await fetch(`${baseUrl}/auth/sessions`, authed(mariaToken))).json()) as any[];
+    const other = sessions.find((item) => !item.current);
+    expect(other).toBeTruthy();
+
+    const foreign = await fetch(`${baseUrl}/auth/sessions/${other.id}`, authed(doctorToken, { method: 'DELETE' }));
+    expect(foreign.status).toBe(404);
+
+    const removed = await fetch(`${baseUrl}/auth/sessions/${other.id}`, authed(mariaToken, { method: 'DELETE' }));
+    expect(removed.status).toBe(200);
+
+    const afterRemove = await fetch(`${baseUrl}/settings`, authed(extraToken));
+    expect(afterRemove.status).toBe(401);
+  });
+
+  it('POST /auth/sessions/revoke-all — завершает все входы пользователя', async () => {
+    const token = await login('doctor@legkie.local', 'DoctorPass123!');
+    expect((await fetch(`${baseUrl}/auth/sessions/revoke-all`, authed(token, { method: 'POST' }))).status).toBe(200);
+    expect((await fetch(`${baseUrl}/settings`, authed(token))).status).toBe(401);
+
+    doctorToken = await login('doctor@legkie.local', 'DoctorPass123!');
+  });
+});

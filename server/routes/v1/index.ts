@@ -7,6 +7,7 @@ import { createAuthRouter } from './auth.ts';
 import { createPatientsRouter } from './patients.ts';
 import { createReportsRouter } from './reports.ts';
 import { createSessionsRouter } from './sessions.ts';
+import { createSettingsRouter } from './settings.ts';
 
 /**
  * Сборка версионированного API кабинета специалиста.
@@ -26,6 +27,7 @@ export function createV1Router(customDb?: AppDatabase): Router {
   router.use(createPatientsRouter());
   router.use(createReportsRouter());
   router.use(createSessionsRouter());
+  router.use(createSettingsRouter());
 
   // Ошибки валидации обрабатываются внутри роутера: поведение API не зависит
   // от того, в какое приложение он смонтирован (прод, тесты, изолированный стенд).

@@ -330,3 +330,11 @@ export interface ReportSnapshotDto {
   createdAt: string;
   data: ReportSummary;
 }
+
+export interface SpecialistSettingsDto {
+  profile: SpecialistProfileDto;
+  notifications: NotificationPrefs;
+  assignmentDefaults: AssignmentDefaults;
+  attentionThresholds: AttentionThresholds;
+  updatedAt: string | null;
+}
