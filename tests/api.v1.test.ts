@@ -40,7 +40,17 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  rmSync(directory, { recursive: true, force: true });
+  // Windows не удаляет файлы с открытыми дескрипторами — закрываем SQLite-соединение явно.
+  try {
+    testDb.close();
+  } catch {
+    // соединение уже закрыто — игнорируем
+  }
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // уборка временного каталога не должна ронять тесты (антивирус/индексатор на Windows)
+  }
 });
 
 describe('API v1: Аутентификация и безопасность', () => {

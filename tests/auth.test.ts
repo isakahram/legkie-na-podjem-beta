@@ -12,13 +12,35 @@ import { AppDatabase } from '../server/db.ts';
 
 let directory = '';
 let dbPath = '';
+const openDatabases: AppDatabase[] = [];
+
+/** Открывает БД и регистрирует её для закрытия в afterEach (важно для Windows). */
+const openDatabase = (file: string): AppDatabase => {
+  const db = new AppDatabase(file);
+  openDatabases.push(db);
+  return db;
+};
 
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'legkie-auth-'));
   dbPath = join(directory, 'test.sqlite');
 });
 
-afterEach(() => rmSync(directory, { recursive: true, force: true }));
+afterEach(() => {
+  // Windows не удаляет файлы с открытыми дескрипторами — закрываем соединения явно.
+  for (const db of openDatabases.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      // соединение уже закрыто — игнорируем
+    }
+  }
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // уборка временного каталога не должна ронять тесты (антивирус/индексатор на Windows)
+  }
+});
 
 describe('Хэширование паролей (scrypt)', () => {
   it('генерирует хэш в формате salt:hash и успешно верифицирует правильный пароль', () => {
@@ -51,7 +73,7 @@ describe('Хэширование паролей (scrypt)', () => {
 
 describe('Сессии и токены в БД', () => {
   it('создаёт сессию, находит по токену и удаляет при выходе', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const user = db.findUserByEmail('doctor@legkie.local')!;
     expect(user).not.toBeNull();
 
@@ -82,7 +104,7 @@ describe('Сессии и токены в БД', () => {
   });
 
   it('истекшая сессия не возвращается из БД', () => {
-    const db = new AppDatabase(dbPath);
+    const db = openDatabase(dbPath);
     const user = db.findUserByEmail('doctor@legkie.local')!;
     const { tokenHash } = generateSessionToken();
     const expiredAt = new Date(Date.now() - 3600 * 1000).toISOString();
