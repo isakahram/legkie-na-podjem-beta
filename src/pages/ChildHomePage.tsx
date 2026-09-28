@@ -7,6 +7,7 @@ import { Brand } from '../components/Brand';
 import { useChild } from '../context/ChildContext';
 import { buildShopSections } from '../skins/shop';
 import type { ChildProfile } from '../types';
+import { pluralizeCoins } from '../utils/pluralize';
 
 export function ChildHomePage() {
   const { child, setChild, logout } = useChild();
@@ -62,43 +63,53 @@ function Shop({ child, message, onChoose, onClose }: { child: ChildProfile; mess
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal shop-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title">
-        <button className="modal__close" onClick={onClose} aria-label="Закрыть"><X /></button>
-        <div><div className="eyebrow"><Palette size={18} /> Воздушный гардероб</div><h2 id="shop-title">Выбери образ</h2><p>Монетки остаются навсегда — собирай их в полёте!</p></div>
-        <span className="coin-pill" title="Общий накопленный баланс"><Coins size={18} /> Всего: {child.balance}</span>
-        {sections.map((section) => (
-          <div className="shop-section" key={section.category}>
-            <h3 className="shop-section__title">{section.title}</h3>
-            <div className="skin-grid">
-              {section.skins.map((skin) => {
-                const clickable = skin.status === 'owned' || skin.status === 'available';
-                const locked = skin.status === 'locked-price' || skin.status === 'locked-progress';
-                return (
-                  <button
-                    className={`skin-card skin-card--${skin.status}`}
-                    key={skin.id}
-                    style={{ '--skin-color': skin.color, '--skin-accent': skin.accent } as CSSProperties}
-                    onClick={() => clickable && void onChoose(skin.id, skin.status === 'owned')}
-                    disabled={!clickable}
-                  >
-                    {locked && <span className="skin-card__badge skin-card__badge--lock" aria-hidden="true"><Lock size={15} /></span>}
-                    {(skin.status === 'owned' || skin.status === 'selected') && (
-                      <span className="skin-card__badge skin-card__badge--check" aria-hidden="true"><Check size={15} /></span>
-                    )}
-                    <Balloon skin={{ id: skin.id }} />
-                    <b>{skin.name}</b>
-                    <span className="skin-card__status">
-                      {skin.status === 'selected' && 'Выбран'}
-                      {skin.status === 'owned' && 'Надеть'}
-                      {skin.status === 'available' && <><Coins size={14} /> Открыть за {skin.price}</>}
-                      {locked && skin.reason}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+        <div className="shop-modal__header">
+          <div className="shop-modal__intro">
+            <div className="eyebrow"><Palette size={18} /> Воздушный гардероб</div>
+            <h2 id="shop-title">Выбери образ</h2>
+            <p>Монетки остаются навсегда — собирай их в полёте!</p>
           </div>
-        ))}
-        {message && <div className="shop-message">{message}</div>}
+          <div className="shop-modal__header-actions">
+            <span className="coin-pill" title="Общий накопленный баланс"><Coins size={18} /> Всего: {child.balance} {pluralizeCoins(child.balance)}</span>
+            <button className="modal__close" onClick={onClose} aria-label="Закрыть"><X /></button>
+          </div>
+        </div>
+        <div className="shop-modal__body">
+          {sections.map((section) => (
+            <div className="shop-section" key={section.category}>
+              <h3 className="shop-section__title">{section.title}</h3>
+              <div className="skin-grid">
+                {section.skins.map((skin) => {
+                  const clickable = skin.status === 'owned' || skin.status === 'available';
+                  const locked = skin.status === 'locked-price' || skin.status === 'locked-progress';
+                  return (
+                    <button
+                      className={`skin-card skin-card--${skin.status}`}
+                      key={skin.id}
+                      style={{ '--skin-color': skin.color, '--skin-accent': skin.accent } as CSSProperties}
+                      onClick={() => clickable && void onChoose(skin.id, skin.status === 'owned')}
+                      disabled={!clickable}
+                    >
+                      {locked && <span className="skin-card__badge skin-card__badge--lock" aria-hidden="true"><Lock size={15} /></span>}
+                      {(skin.status === 'owned' || skin.status === 'selected') && (
+                        <span className="skin-card__badge skin-card__badge--check" aria-hidden="true"><Check size={15} /></span>
+                      )}
+                      <Balloon skin={{ id: skin.id }} />
+                      <b>{skin.name}</b>
+                      <span className="skin-card__status">
+                        {skin.status === 'selected' && 'Выбран'}
+                        {skin.status === 'owned' && 'Надеть'}
+                        {skin.status === 'available' && <><Coins size={14} /> Открыть за {skin.price} {pluralizeCoins(skin.price)}</>}
+                        {locked && skin.reason}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {message && <div className="shop-message">{message}</div>}
+        </div>
       </section>
     </div>
   );

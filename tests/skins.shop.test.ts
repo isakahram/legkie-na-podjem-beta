@@ -32,11 +32,25 @@ describe('buildShopSections', () => {
     expect(ocean.price).toBe(18);
   });
 
-  it('статус locked-price — не хватает монет, указана точная нехватка', () => {
+  it('статус locked-price — не хватает монет, указана точная нехватка с правильным склонением', () => {
     const sections = buildShopSections(new Set(['berry']), 'berry', 10);
     const sunny = sections[0].skins.find((skin) => skin.id === 'sunny')!; // цена 12
     expect(sunny.status).toBe('locked-price');
-    expect(sunny.reason).toBe('Не хватает 2 монет');
+    expect(sunny.reason).toBe('Не хватает 2 монеты');
+  });
+
+  it('склонение «монет(а/ы)» в нехватке верное для разных остатков', () => {
+    // ocean: цена 18, mint: 30
+    const at = (balance: number, id: string) =>
+      buildShopSections(new Set(['berry']), 'berry', balance)
+        .flatMap((section) => section.skins)
+        .find((skin) => skin.id === id)!;
+
+    expect(at(17, 'ocean').reason).toBe('Не хватает 1 монета'); // 18 - 17 = 1
+    expect(at(13, 'ocean').reason).toBe('Не хватает 5 монет'); // 18 - 13 = 5
+    expect(at(0, 'mint').reason).toBe('Не хватает 30 монет'); // 30 - 0 = 30
+    expect(at(9, 'mint').reason).toBe('Не хватает 21 монета'); // 30 - 9 = 21
+    expect(at(8, 'mint').reason).toBe('Не хватает 22 монеты'); // 30 - 8 = 22
   });
 
   it('статус locked-progress — эффект без прогресса, даже при огромном балансе', () => {

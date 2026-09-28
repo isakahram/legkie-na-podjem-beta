@@ -1,4 +1,5 @@
 import { CATEGORY_TITLES, SKIN_CATALOG, type SkinCategory, type SkinDefinition } from './catalog';
+import { pluralizeCoins } from '../utils/pluralize';
 
 export type ShopSkinStatus = 'selected' | 'owned' | 'available' | 'locked-price' | 'locked-progress';
 
@@ -56,7 +57,8 @@ export function buildShopSections(
       status = 'available';
     } else {
       status = 'locked-price';
-      reason = `Не хватает ${definition.price - balance} монет`;
+      const missing = definition.price - balance;
+      reason = `Не хватает ${missing} ${pluralizeCoins(missing)}`;
     }
 
     const view: ShopSkinView = {
