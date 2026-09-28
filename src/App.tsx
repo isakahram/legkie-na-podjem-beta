@@ -6,9 +6,7 @@ import { ChildAccessPage } from './pages/ChildAccessPage';
 import { ChildHomePage } from './pages/ChildHomePage';
 import { GamePage } from './pages/GamePage';
 import { LandingPage } from './pages/LandingPage';
-import { PatientPage } from './pages/PatientPage';
 import { ResultPage } from './pages/ResultPage';
-import { SpecialistPage } from './pages/SpecialistPage';
 import { SpecialistAuthProvider } from './specialist/AuthContext';
 import { specialistRoutes } from './specialist/routes';
 
@@ -29,10 +27,6 @@ export default function App() {
 
           {/* Кабинет специалиста */}
           {specialistRoutes}
-
-          {/* Интерфейс этапа 1 остаётся доступным до завершения перехода на API v1 */}
-          <Route path="/specialist-legacy" element={<SpecialistPage />} />
-          <Route path="/specialist-legacy/patient/:id" element={<PatientPage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -18,9 +18,7 @@ import type {
   AuthResponse,
   CalibrationProfile,
   ChildProfile,
-  ClinicianChild,
   CreateAssignmentInput,
-  PatientDetail,
   PatientV1DetailDto,
   SessionPayload,
   SessionRecord,
@@ -86,12 +84,6 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ skinId }),
     }),
-
-  // ==========================================
-  // СТАРЫЙ API КАБИНЕТА (ДЛЯ СОВМЕСТИМОСТИ UI)
-  // ==========================================
-  clinicianChildren: () => request<ClinicianChild[]>('/api/clinician/children'),
-  patientDetail: (id: string) => request<PatientDetail>(`/api/clinician/children/${id}`),
 
   // ==========================================
   // API V1 — КАБИНЕТ СПЕЦИАЛИСТА

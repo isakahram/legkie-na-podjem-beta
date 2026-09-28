@@ -24,8 +24,6 @@ export interface SessionPayload {
 export interface SessionRecord extends SessionPayload { id: string; childNickname?: string; }
 export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; averageBreathDuration?: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
 export interface PatientSummary { sessionsThisWeek: number; targetSessions: number; adherencePercent: number; averageCorrectPercent: number; averageBreathDuration: number | null; bestDuration?: number | null; averageStability: number | null; averageSessionDuration: number; breathCompletionPercent: number; cycleCompletionPercent?: number; missedThisWeek: number; lastSessionAt: string | null; trendPercent: number; }
-export interface ClinicianChild extends ChildProfile { code: string; summary: PatientSummary; }
-export interface PatientDetail { child: ClinicianChild; weekly: WeeklyPoint[]; sessions: SessionRecord[]; }
 export interface ApiErrorBody { error: string; details?: unknown; }
 
 // ==========================================
