@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { registerServiceWorker } from './pwa';
 import './styles.css';
+import './styles/specialist.css';
 
 registerServiceWorker();
 

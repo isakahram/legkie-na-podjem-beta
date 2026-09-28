@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { calculatePatientAnalytics } from './analytics.ts';
 import { authMiddleware } from './auth.ts';
 import { db } from './db.ts';
-import { createV1Router } from './routes/v1.ts';
+import { createV1Router } from './routes/v1/index.ts';
 
 export const app = express();
 const port = Number(process.env.PORT || 3001);

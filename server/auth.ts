@@ -10,6 +10,10 @@ export interface AuthenticatedUser {
   organizationName?: string | null;
   createdAt: string;
   lastLoginAt: string | null;
+  displayName?: string | null;
+  clinicName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
 }
 
 export interface SessionInfo {
@@ -149,6 +153,10 @@ export function authMiddleware(req: AuthContextRequest, _res: Response, next: Ne
       organizationName: session.user.organization_name,
       createdAt: session.user.created_at,
       lastLoginAt: session.user.last_login_at,
+      displayName: session.user.display_name ?? null,
+      clinicName: session.user.clinic_name ?? null,
+      contactEmail: session.user.contact_email ?? null,
+      contactPhone: session.user.contact_phone ?? null,
     };
     database.touchAuthSession(session.id);
   }

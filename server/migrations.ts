@@ -359,6 +359,32 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    name: '002_specialist_profile_fields',
+    up: (db: DatabaseSync) => {
+      // Профиль специалиста для раздела «Настройки»: имя, клиника, контакты.
+      const columns = (db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map(
+        (column) => column.name,
+      );
+      const addColumn = (name: string, definition: string): void => {
+        if (!columns.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition};`);
+      };
+
+      addColumn('display_name', 'TEXT');
+      addColumn('clinic_name', 'TEXT');
+      addColumn('contact_email', 'TEXT');
+      addColumn('contact_phone', 'TEXT');
+
+      // Бэкфилл легаси-врача, чтобы кабинет не показывал пустую шапку.
+      db.prepare(
+        `UPDATE users
+            SET display_name = COALESCE(display_name, ?),
+                clinic_name = COALESCE(clinic_name, ?)
+          WHERE id = 'user-doctor'`,
+      ).run('Анна Викторовна', 'Детский пульмонологический центр');
+    },
+  },
 ];
 
 export function runMigrations(db: DatabaseSync): void {

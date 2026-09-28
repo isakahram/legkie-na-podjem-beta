@@ -1,0 +1,1034 @@
+/* ==========================================================================
+   Кабинет специалиста: спокойная светлая тема.
+   Голубой — основной, мягкий зелёный — позитив, оранжевый — пропуски.
+   ========================================================================== */
+
+.sp-shell,
+.sp-auth {
+  --sp-bg: #f4f7fb;
+  --sp-surface: #ffffff;
+  --sp-border: #e3eaf3;
+  --sp-text: #1e2a37;
+  --sp-muted: #6b7c93;
+  --sp-accent: #3b82c4;
+  --sp-accent-soft: #e8f1fa;
+  --sp-positive: #4fa87a;
+  --sp-positive-soft: #e6f4ec;
+  --sp-warning: #d98236;
+  --sp-warning-soft: #fdf0e3;
+  --sp-critical: #c2553f;
+  --sp-critical-soft: #fbe9e5;
+  --sp-radius: 14px;
+  --sp-shadow: 0 1px 2px rgba(30, 42, 55, 0.04), 0 8px 24px rgba(30, 42, 55, 0.05);
+  color: var(--sp-text);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* --- Каркас ------------------------------------------------------------- */
+
+.sp-shell {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  min-height: 100vh;
+  background: var(--sp-bg);
+}
+
+.sp-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 18px;
+  background: var(--sp-surface);
+  border-right: 1px solid var(--sp-border);
+}
+
+.sp-sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sp-sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--sp-muted);
+  font-size: 0.94rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.sp-sidebar nav a:hover {
+  background: var(--sp-bg);
+  color: var(--sp-text);
+}
+
+.sp-sidebar nav a.is-active {
+  background: var(--sp-accent-soft);
+  color: var(--sp-accent);
+}
+
+.sp-sidebar__foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sp-sidebar__foot button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sp-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sp-sidebar__foot button:hover {
+  background: var(--sp-bg);
+  color: var(--sp-text);
+}
+
+.sp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sp-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 28px;
+  background: var(--sp-surface);
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.sp-topbar__title {
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-topbar__title small {
+  color: var(--sp-muted);
+  font-size: 0.78rem;
+  text-transform: lowercase;
+}
+
+.sp-topbar__title b {
+  font-size: 1rem;
+}
+
+.sp-topbar__side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.sp-topbar__menu,
+.sp-topbar__logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  color: var(--sp-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sp-topbar__logout:hover,
+.sp-topbar__menu:hover {
+  color: var(--sp-text);
+  border-color: #cfdcea;
+}
+
+.sp-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--sp-accent-soft);
+  color: var(--sp-accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex: none;
+}
+
+.sp-avatar--sm {
+  width: 30px;
+  height: 30px;
+  font-size: 0.74rem;
+}
+
+.sp-content {
+  padding: 26px 28px 48px;
+  min-width: 0;
+}
+
+.sp-boot {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+/* --- Общие блоки -------------------------------------------------------- */
+
+.sp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1180px;
+}
+
+.sp-page__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sp-page__head h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  letter-spacing: -0.01em;
+}
+
+.sp-page__head p {
+  margin: 4px 0 0;
+  color: var(--sp-muted);
+  font-size: 0.92rem;
+}
+
+.sp-fade {
+  animation: sp-fade-in 0.28s ease both;
+}
+
+@keyframes sp-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-fade {
+    animation: none;
+  }
+}
+
+.sp-panel {
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius);
+  box-shadow: var(--sp-shadow);
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sp-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sp-panel__head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.sp-panel__head p {
+  margin: 3px 0 0;
+  color: var(--sp-muted);
+  font-size: 0.85rem;
+}
+
+.sp-two-col {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 18px;
+}
+
+/* --- KPI ---------------------------------------------------------------- */
+
+.sp-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.sp-kpi {
+  display: flex;
+  gap: 13px;
+  padding: 16px 18px;
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius);
+  box-shadow: var(--sp-shadow);
+}
+
+.sp-kpi__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--sp-accent-soft);
+  color: var(--sp-accent);
+  flex: none;
+}
+
+.sp-kpi--positive .sp-kpi__icon {
+  background: var(--sp-positive-soft);
+  color: var(--sp-positive);
+}
+
+.sp-kpi--warning .sp-kpi__icon {
+  background: var(--sp-warning-soft);
+  color: var(--sp-warning);
+}
+
+.sp-kpi__body small {
+  display: block;
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-kpi__body strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.sp-kpi__body p {
+  margin: 4px 0 0;
+  color: var(--sp-muted);
+  font-size: 0.79rem;
+}
+
+/* --- Пилюли, подсказки, пустые состояния -------------------------------- */
+
+.sp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--sp-bg);
+  color: var(--sp-muted);
+}
+
+.sp-pill--positive {
+  background: var(--sp-positive-soft);
+  color: #2f7455;
+}
+
+.sp-pill--warning {
+  background: var(--sp-warning-soft);
+  color: #a45f1c;
+}
+
+.sp-pill--critical {
+  background: var(--sp-critical-soft);
+  color: var(--sp-critical);
+}
+
+.sp-validation {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  color: var(--sp-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.sp-hint {
+  margin: 0;
+  color: var(--sp-muted);
+  font-size: 0.82rem;
+}
+
+.sp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+  color: var(--sp-muted);
+  text-align: center;
+}
+
+.sp-empty b {
+  color: var(--sp-text);
+}
+
+.sp-spinner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 4px;
+  color: var(--sp-muted);
+}
+
+.sp-spinner svg {
+  animation: sp-spin 1s linear infinite;
+}
+
+@keyframes sp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sp-error {
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--sp-critical-soft);
+  color: var(--sp-critical);
+  font-size: 0.88rem;
+}
+
+/* --- Управление --------------------------------------------------------- */
+
+.sp-segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--sp-bg);
+  border-radius: 11px;
+  flex-wrap: wrap;
+}
+
+.sp-segmented button {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sp-muted);
+  font: inherit;
+  font-size: 0.87rem;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.sp-segmented button.is-active {
+  background: var(--sp-surface);
+  color: var(--sp-accent);
+  box-shadow: 0 1px 3px rgba(30, 42, 55, 0.08);
+}
+
+.sp-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 17px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  color: var(--sp-text);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.sp-button:hover {
+  border-color: #cfdcea;
+}
+
+.sp-button--primary {
+  background: var(--sp-accent);
+  border-color: var(--sp-accent);
+  color: #fff;
+}
+
+.sp-button--primary:hover {
+  background: #3574b1;
+  border-color: #3574b1;
+}
+
+.sp-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.sp-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  color: var(--sp-muted);
+}
+
+.sp-search input {
+  border: 0;
+  outline: none;
+  font: inherit;
+  font-size: 0.9rem;
+  min-width: 190px;
+  color: var(--sp-text);
+  background: transparent;
+}
+
+.sp-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--sp-muted);
+  font-size: 0.85rem;
+}
+
+.sp-select select,
+.sp-field select,
+.sp-field input {
+  border: 0;
+  outline: none;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--sp-text);
+  background: transparent;
+  width: 100%;
+}
+
+.sp-select select {
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--sp-surface);
+}
+
+/* --- Таблицы ------------------------------------------------------------ */
+
+.sp-table-wrap {
+  overflow-x: auto;
+}
+
+.sp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.sp-table th,
+.sp-table td {
+  padding: 11px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--sp-border);
+  vertical-align: middle;
+}
+
+.sp-table thead th {
+  color: var(--sp-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sp-table tbody th {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.sp-table tbody th small {
+  display: block;
+  color: var(--sp-muted);
+  font-size: 0.76rem;
+}
+
+.sp-table tbody tr:hover {
+  background: #fafcfe;
+}
+
+.sp-table__go a {
+  display: inline-flex;
+  color: var(--sp-muted);
+}
+
+.sp-table__go a:hover {
+  color: var(--sp-accent);
+}
+
+.sp-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--sp-muted);
+  font-size: 0.85rem;
+}
+
+.sp-pagination button {
+  padding: 7px 13px;
+  border: 1px solid var(--sp-border);
+  border-radius: 9px;
+  background: var(--sp-surface);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sp-pagination button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* --- Списки дашборда ---------------------------------------------------- */
+
+.sp-attention-list,
+.sp-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sp-attention-list a,
+.sp-feed a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.18s ease;
+}
+
+.sp-attention-list a:hover,
+.sp-feed a:hover {
+  background: var(--sp-bg);
+}
+
+.sp-attention-list__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sp-attention-list__reasons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sp-feed a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+}
+
+.sp-feed small {
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.sp-feed span {
+  grid-column: 1 / -1;
+  color: var(--sp-muted);
+  font-size: 0.82rem;
+}
+
+/* --- Графики ------------------------------------------------------------ */
+
+.sp-chart {
+  margin: 0;
+}
+
+.sp-chart svg {
+  width: 100%;
+  height: 210px;
+  display: block;
+}
+
+.sp-chart__grid {
+  stroke: #eef3f8;
+  stroke-width: 1;
+}
+
+.sp-chart__axis {
+  fill: #93a3b8;
+  font-size: 11px;
+}
+
+.sp-chart__bar {
+  fill: #7fb2dd;
+}
+
+.sp-chart__target {
+  stroke: #b6c4d4;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.sp-chart__line {
+  fill: none;
+  stroke: var(--sp-accent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.sp-chart__area {
+  fill: rgba(59, 130, 196, 0.1);
+  stroke: none;
+}
+
+.sp-chart__point {
+  fill: #fff;
+  stroke: var(--sp-accent);
+  stroke-width: 2;
+}
+
+.sp-chart__legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.sp-dot--bar {
+  background: #7fb2dd;
+}
+
+.sp-dot--target {
+  background: #b6c4d4;
+}
+
+/* --- Демо-режим --------------------------------------------------------- */
+
+.sp-demo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--sp-warning-soft);
+  color: #a45f1c;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.sp-demo-chip--large {
+  font-size: 0.85rem;
+  padding: 7px 14px;
+}
+
+.sp-demo-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--sp-warning-soft);
+  color: #a45f1c;
+  font-size: 0.8rem;
+}
+
+/* --- Вход и формы ------------------------------------------------------- */
+
+.sp-auth {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f4f8fc 0%, #eaf1f8 100%);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.sp-auth__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sp-auth__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--sp-accent);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.sp-auth__card {
+  width: min(430px, 100%);
+  margin: 0 auto;
+  padding: 30px;
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
+  border-radius: 18px;
+  box-shadow: var(--sp-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sp-auth__card h1 {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.sp-auth__lead {
+  margin: 0;
+  color: var(--sp-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.sp-auth__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  color: var(--sp-muted);
+  font-size: 0.88rem;
+}
+
+.sp-auth__list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sp-auth__hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--sp-muted);
+  font-size: 0.8rem;
+}
+
+.sp-auth__demo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sp-border);
+  color: var(--sp-accent);
+  font-size: 0.89rem;
+  text-decoration: none;
+}
+
+.sp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.sp-field > span {
+  color: var(--sp-muted);
+  font-size: 0.83rem;
+}
+
+.sp-field__control {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  color: var(--sp-muted);
+}
+
+.sp-field__control:focus-within {
+  border-color: var(--sp-accent);
+}
+
+.sp-field-row {
+  display: flex;
+  gap: 12px;
+}
+
+/* --- Модальное окно ----------------------------------------------------- */
+
+.sp-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 40;
+}
+
+.sp-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(30, 42, 55, 0.35);
+}
+
+.sp-modal__card {
+  position: relative;
+  width: min(440px, 100%);
+  background: var(--sp-surface);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(30, 42, 55, 0.2);
+  animation: sp-fade-in 0.2s ease both;
+}
+
+.sp-modal__card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--sp-border);
+}
+
+.sp-modal__card header h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.sp-modal__card header button {
+  border: 0;
+  background: transparent;
+  color: var(--sp-muted);
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.sp-modal__body {
+  padding: 20px;
+}
+
+.sp-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.sp-code {
+  margin: 10px 0 18px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--sp-accent-soft);
+  color: var(--sp-accent);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* --- Адаптив ------------------------------------------------------------ */
+
+@media (max-width: 1119px) {
+  .sp-shell--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-shell--compact .sp-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 248px;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+    box-shadow: 0 0 40px rgba(30, 42, 55, 0.12);
+  }
+
+  .sp-shell--compact .sp-sidebar.is-open {
+    transform: none;
+  }
+
+  .sp-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 719px) {
+  .sp-content {
+    padding: 18px 14px 40px;
+  }
+
+  .sp-topbar {
+    padding: 12px 14px;
+  }
+
+  .sp-topbar__logout span {
+    display: none;
+  }
+
+  .sp-panel {
+    padding: 14px;
+  }
+
+  .sp-field-row {
+    flex-direction: column;
+  }
+}

@@ -9,22 +9,34 @@ import { LandingPage } from './pages/LandingPage';
 import { PatientPage } from './pages/PatientPage';
 import { ResultPage } from './pages/ResultPage';
 import { SpecialistPage } from './pages/SpecialistPage';
+import { SpecialistAuthProvider } from './specialist/AuthContext';
+import { specialistRoutes } from './specialist/routes';
 
 export default function App() {
   return (
     <ChildProvider>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/child" element={<ChildAccessPage />} />
-        <Route path="/child/home" element={<ChildHomePage />} />
-        <Route path="/child/calibration" element={<CalibrationPage />} />
-        <Route path="/child/game" element={<GamePage />} />
-        <Route path="/child/result" element={<ResultPage />} />
-        <Route path="/specialist" element={<SpecialistPage />} />
-        <Route path="/specialist/patient/:id" element={<PatientPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <SpecialistAuthProvider>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/about" element={<AboutPage />} />
+
+          {/* Игра ребёнка — маршруты не меняются */}
+          <Route path="/child" element={<ChildAccessPage />} />
+          <Route path="/child/home" element={<ChildHomePage />} />
+          <Route path="/child/calibration" element={<CalibrationPage />} />
+          <Route path="/child/game" element={<GamePage />} />
+          <Route path="/child/result" element={<ResultPage />} />
+
+          {/* Кабинет специалиста */}
+          {specialistRoutes}
+
+          {/* Интерфейс этапа 1 остаётся доступным до завершения перехода на API v1 */}
+          <Route path="/specialist-legacy" element={<SpecialistPage />} />
+          <Route path="/specialist-legacy/patient/:id" element={<PatientPage />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </SpecialistAuthProvider>
     </ChildProvider>
   );
 }
