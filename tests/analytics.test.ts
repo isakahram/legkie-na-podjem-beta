@@ -16,12 +16,14 @@ const session = (overrides: Partial<SessionRecord> = {}): SessionRecord => ({
   breathCount: 8,
   averageStrength: 0.7,
   averageBreathDuration: 3.2,
+  averageStability: 72,
   correctBreathPercent: 80,
   completedCycles: 8,
   targetCycles: 8,
   coinsCollected: 5,
-  obstaclesAvoided: 3,
-  suspiciousEvents: 0,
+  averageLatencyMs: 60,
+  maxLatencyMs: 95,
+  technicalPauses: 0,
   status: 'completed',
   inputMode: 'microphone',
   ...overrides,
@@ -44,6 +46,21 @@ describe('calculatePatientAnalytics', () => {
     ], assignment, now);
     expect(result.summary.sessionsThisWeek).toBe(0);
     expect(result.summary.averageCorrectPercent).toBe(0);
+  });
+
+  it('старые записи без новых метрик не портят средние и дают null', () => {
+    const result = calculatePatientAnalytics([
+      session({ averageStability: null, averageBreathDuration: null }),
+      session({ id: 'second', averageStability: 80, averageBreathDuration: 4 }),
+    ], assignment, now);
+    expect(result.summary.averageStability).toBe(80);
+    expect(result.summary.averageBreathDuration).toBe(4);
+
+    const legacyOnly = calculatePatientAnalytics([
+      session({ averageStability: null, averageBreathDuration: null }),
+    ], assignment, now);
+    expect(legacyOnly.summary.averageStability).toBeNull();
+    expect(legacyOnly.summary.averageBreathDuration).toBeNull();
   });
 
   it('calculates averages and cycle completion', () => {

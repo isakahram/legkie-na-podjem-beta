@@ -31,12 +31,14 @@ interface SessionRow {
   duration_seconds: number;
   breath_count: number;
   average_strength: number;
-  average_breath_duration: number;
+  average_breath_duration: number | null;
   correct_breath_percent: number;
   completed_cycles: number;
   target_cycles: number;
   coins_collected: number;
-  obstacles_avoided: number;
+  average_stability: number | null;
+  average_latency_ms: number | null;
+  max_latency_ms: number | null;
   suspicious_events: number;
   status: 'completed' | 'stopped';
   input_mode: 'microphone' | 'demo';
@@ -44,6 +46,50 @@ interface SessionRow {
 }
 
 const defaultPath = join(process.cwd(), 'data', 'legkie.sqlite');
+
+/**
+ * Актуальная схема сессий. Метрики, которых не было в старых записях,
+ * допускают NULL: для таких сессий API возвращает null, а не 0.
+ * Колонка obstacles_avoided сохранена ради безопасной миграции, но
+ * не читается и не попадает в DTO.
+ */
+const SESSIONS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+    started_at TEXT NOT NULL,
+    duration_seconds INTEGER NOT NULL,
+    breath_count INTEGER NOT NULL,
+    average_strength REAL NOT NULL,
+    average_breath_duration REAL,
+    average_stability REAL,
+    correct_breath_percent REAL NOT NULL,
+    completed_cycles INTEGER NOT NULL,
+    target_cycles INTEGER NOT NULL,
+    coins_collected INTEGER NOT NULL,
+    average_latency_ms REAL,
+    max_latency_ms REAL,
+    obstacles_avoided INTEGER DEFAULT 0,
+    suspicious_events INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK(status IN ('completed', 'stopped')),
+    input_mode TEXT NOT NULL CHECK(input_mode IN ('microphone', 'demo'))
+  );
+`;
+
+/** Поля сессии, читаемые из БД. SELECT * не используется намеренно. */
+const SESSION_FIELDS = [
+  's.id', 's.child_id', 's.started_at', 's.duration_seconds', 's.breath_count',
+  's.average_strength', 's.average_breath_duration', 's.average_stability',
+  's.correct_breath_percent', 's.completed_cycles', 's.target_cycles',
+  's.coins_collected', 's.average_latency_ms', 's.max_latency_ms',
+  's.suspicious_events', 's.status', 's.input_mode',
+].join(', ');
+
+const CHILD_FIELDS = [
+  'c.id', 'c.code', 'c.nickname', 'c.age', 'c.avatar', 'c.balance', 'c.selected_skin',
+].join(', ');
+
+
 
 export class AppDatabase {
   private readonly db: DatabaseSync;
@@ -53,6 +99,7 @@ export class AppDatabase {
     this.db = new DatabaseSync(path);
     this.db.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
     this.migrate();
+    this.migrateSessions();
     this.seed();
   }
 
@@ -101,26 +148,43 @@ export class AppDatabase {
         quality REAL NOT NULL,
         created_at TEXT NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
-        started_at TEXT NOT NULL,
-        duration_seconds INTEGER NOT NULL,
-        breath_count INTEGER NOT NULL,
-        average_strength REAL NOT NULL,
-        average_breath_duration REAL NOT NULL,
-        correct_breath_percent REAL NOT NULL,
-        completed_cycles INTEGER NOT NULL,
-        target_cycles INTEGER NOT NULL,
-        coins_collected INTEGER NOT NULL,
-        obstacles_avoided INTEGER NOT NULL,
-        suspicious_events INTEGER NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('completed', 'stopped')),
-        input_mode TEXT NOT NULL CHECK(input_mode IN ('microphone', 'demo'))
-      );
+      ${SESSIONS_TABLE_SQL}
       CREATE INDEX IF NOT EXISTS idx_sessions_child_date ON sessions(child_id, started_at DESC);
       CREATE INDEX IF NOT EXISTS idx_calibrations_child_date ON calibrations(child_id, created_at DESC);
     `);
+  }
+
+
+  /**
+   * Пересобирает таблицу сессий, если она создана до появления новых метрик.
+   * Старые записи переносятся как есть, новые колонки остаются NULL.
+   */
+  private migrateSessions(): void {
+    const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>;
+    if (columns.length === 0 || columns.some((column) => column.name === 'average_stability')) return;
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('ALTER TABLE sessions RENAME TO sessions_legacy;');
+      this.db.exec(SESSIONS_TABLE_SQL);
+      this.db.exec(`
+        INSERT INTO sessions
+          (id, child_id, started_at, duration_seconds, breath_count, average_strength,
+           average_breath_duration, correct_breath_percent, completed_cycles, target_cycles,
+           coins_collected, obstacles_avoided, suspicious_events, status, input_mode)
+        SELECT id, child_id, started_at, duration_seconds, breath_count, average_strength,
+           average_breath_duration, correct_breath_percent, completed_cycles, target_cycles,
+           coins_collected, obstacles_avoided, suspicious_events, status, input_mode
+        FROM sessions_legacy;
+      `);
+      this.db.exec('DROP TABLE sessions_legacy;');
+      this.db.exec(
+        'CREATE INDEX IF NOT EXISTS idx_sessions_child_date ON sessions(child_id, started_at DESC);',
+      );
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   private seed(): void {
@@ -191,12 +255,14 @@ export class AppDatabase {
               breathCount: completedCycles,
               averageStrength: 0.52 + patternIndex * 0.025,
               averageBreathDuration: 2.1 + patternIndex * 0.12 + sessionIndex * 0.08,
+              averageStability: 62 + patternIndex * 3 + sessionIndex,
               correctBreathPercent: correct,
               completedCycles,
               targetCycles,
               coinsCollected: 4 + sessionIndex * 2,
-              obstaclesAvoided: 3 + sessionIndex,
-              suspiciousEvents: patternIndex < 2 && sessionIndex === 0 ? 1 : 0,
+              averageLatencyMs: 58 + sessionIndex * 3,
+              maxLatencyMs: 96 + sessionIndex * 4,
+              technicalPauses: patternIndex < 2 && sessionIndex === 0 ? 1 : 0,
               status: 'completed',
               inputMode: 'microphone',
             });
@@ -214,7 +280,8 @@ export class AppDatabase {
     const key = byCode ? 'c.code' : 'c.id';
     return this.db
       .prepare(
-        `SELECT c.*, a.sessions_per_week, a.cycles_per_session, a.recommended_duration_seconds
+        `SELECT ${CHILD_FIELDS}, a.sessions_per_week, a.cycles_per_session,
+                a.recommended_duration_seconds
          FROM children c JOIN assignments a ON a.child_id = c.id
          WHERE ${key} = ?`,
       )
@@ -224,7 +291,8 @@ export class AppDatabase {
   private mapChild(row: ChildRow): ChildProfile {
     const skinRows = this.db
       .prepare(
-        `SELECT s.*, CASE WHEN cs.child_id IS NULL THEN 0 ELSE 1 END AS owned
+        `SELECT s.id, s.name, s.color, s.accent, s.price,
+                CASE WHEN cs.child_id IS NULL THEN 0 ELSE 1 END AS owned
          FROM skins s LEFT JOIN child_skins cs ON cs.skin_id = s.id AND cs.child_id = ?
          ORDER BY s.price ASC`,
       )
@@ -258,7 +326,8 @@ export class AppDatabase {
   listChildren(): Array<ChildProfile & { code: string }> {
     const rows = this.db
       .prepare(
-        `SELECT c.*, a.sessions_per_week, a.cycles_per_session, a.recommended_duration_seconds
+        `SELECT ${CHILD_FIELDS}, a.sessions_per_week, a.cycles_per_session,
+                a.recommended_duration_seconds
          FROM children c JOIN assignments a ON a.child_id = c.id ORDER BY c.nickname`,
       )
       .all() as unknown as ChildRow[];
@@ -286,7 +355,11 @@ export class AppDatabase {
 
   latestCalibration(childId: string): CalibrationProfile | null {
     const row = this.db
-      .prepare('SELECT * FROM calibrations WHERE child_id = ? ORDER BY created_at DESC LIMIT 1')
+      .prepare(
+        `SELECT ambient_rms, breath_rms, breath_zcr, breath_centroid, breath_flatness,
+                quality, created_at
+         FROM calibrations WHERE child_id = ? ORDER BY created_at DESC LIMIT 1`,
+      )
       .get(childId) as
       | {
           ambient_rms: number;
@@ -316,9 +389,10 @@ export class AppDatabase {
     this.db.prepare(
       `INSERT INTO sessions
        (id, child_id, started_at, duration_seconds, breath_count, average_strength,
-        average_breath_duration, correct_breath_percent, completed_cycles, target_cycles,
-        coins_collected, obstacles_avoided, suspicious_events, status, input_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        average_breath_duration, average_stability, correct_breath_percent, completed_cycles,
+        target_cycles, coins_collected, average_latency_ms, max_latency_ms,
+        suspicious_events, status, input_mode)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       payload.childId,
@@ -327,12 +401,14 @@ export class AppDatabase {
       payload.breathCount,
       payload.averageStrength,
       payload.averageBreathDuration,
+      payload.averageStability,
       payload.correctBreathPercent,
       payload.completedCycles,
       payload.targetCycles,
       payload.coinsCollected,
-      payload.obstaclesAvoided,
-      payload.suspiciousEvents,
+      payload.averageLatencyMs,
+      payload.maxLatencyMs,
+      payload.technicalPauses,
       payload.status,
       payload.inputMode,
     );
@@ -348,14 +424,15 @@ export class AppDatabase {
     const rows = (childId
       ? this.db
           .prepare(
-            `SELECT s.*, c.nickname AS child_nickname FROM sessions s
-             JOIN children c ON c.id = s.child_id WHERE child_id = ? ORDER BY started_at DESC`,
+            `SELECT ${SESSION_FIELDS}, c.nickname AS child_nickname FROM sessions s
+             JOIN children c ON c.id = s.child_id WHERE s.child_id = ?
+             ORDER BY s.started_at DESC`,
           )
           .all(childId)
       : this.db
           .prepare(
-            `SELECT s.*, c.nickname AS child_nickname FROM sessions s
-             JOIN children c ON c.id = s.child_id ORDER BY started_at DESC`,
+            `SELECT ${SESSION_FIELDS}, c.nickname AS child_nickname FROM sessions s
+             JOIN children c ON c.id = s.child_id ORDER BY s.started_at DESC`,
           )
           .all()) as unknown as SessionRow[];
     return rows.map((row) => ({
@@ -366,13 +443,16 @@ export class AppDatabase {
       durationSeconds: row.duration_seconds,
       breathCount: row.breath_count,
       averageStrength: row.average_strength,
-      averageBreathDuration: row.average_breath_duration,
+      // Старые записи не содержат новых метрик: возвращаем null, а не 0.
+      averageBreathDuration: row.average_breath_duration ?? null,
+      averageStability: row.average_stability ?? null,
       correctBreathPercent: row.correct_breath_percent,
       completedCycles: row.completed_cycles,
       targetCycles: row.target_cycles,
       coinsCollected: row.coins_collected,
-      obstaclesAvoided: row.obstacles_avoided,
-      suspiciousEvents: row.suspicious_events,
+      averageLatencyMs: row.average_latency_ms ?? null,
+      maxLatencyMs: row.max_latency_ms ?? null,
+      technicalPauses: row.suspicious_events,
       status: row.status,
       inputMode: row.input_mode,
     }));
