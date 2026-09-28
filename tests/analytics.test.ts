@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+import { calculatePatientAnalytics } from '../server/analytics.ts';
+import type { Assignment, SessionRecord } from '../src/types.ts';
+
+const assignment: Assignment = {
+  sessionsPerWeek: 3,
+  cyclesPerSession: 8,
+  recommendedDurationSeconds: 60,
+};
+
+const session = (overrides: Partial<SessionRecord> = {}): SessionRecord => ({
+  id: crypto.randomUUID(),
+  childId: 'child-test',
+  startedAt: '2026-09-28T14:00:00.000Z',
+  durationSeconds: 60,
+  breathCount: 8,
+  averageStrength: 0.7,
+  averageBreathDuration: 3.2,
+  correctBreathPercent: 80,
+  completedCycles: 8,
+  targetCycles: 8,
+  coinsCollected: 5,
+  obstaclesAvoided: 3,
+  suspiciousEvents: 0,
+  status: 'completed',
+  inputMode: 'microphone',
+  ...overrides,
+});
+
+describe('calculatePatientAnalytics', () => {
+  const now = new Date('2026-09-29T12:00:00.000Z');
+
+  it('calculates current weekly adherence and missing sessions', () => {
+    const result = calculatePatientAnalytics([session(), session({ id: 'second', startedAt: '2026-09-29T08:00:00.000Z' })], assignment, now);
+    expect(result.summary.sessionsThisWeek).toBe(2);
+    expect(result.summary.adherencePercent).toBe(67);
+    expect(result.summary.missedThisWeek).toBe(1);
+  });
+
+  it('excludes demo and stopped sessions from clinician metrics', () => {
+    const result = calculatePatientAnalytics([
+      session({ inputMode: 'demo' }),
+      session({ id: 'stopped', status: 'stopped', inputMode: 'microphone' }),
+    ], assignment, now);
+    expect(result.summary.sessionsThisWeek).toBe(0);
+    expect(result.summary.averageCorrectPercent).toBe(0);
+  });
+
+  it('calculates averages and cycle completion', () => {
+    const result = calculatePatientAnalytics([
+      session({ averageBreathDuration: 2.5, correctBreathPercent: 70, completedCycles: 6 }),
+      session({ id: 'second', averageBreathDuration: 3.5, correctBreathPercent: 90, completedCycles: 8 }),
+    ], assignment, now);
+    expect(result.summary.averageBreathDuration).toBe(3);
+    expect(result.summary.averageCorrectPercent).toBe(80);
+    expect(result.summary.cycleCompletionPercent).toBe(88);
+  });
+
+  it('returns eight chronological weekly points', () => {
+    const { weekly } = calculatePatientAnalytics([session()], assignment, now);
+    expect(weekly).toHaveLength(8);
+    expect(weekly.at(-1)?.sessions).toBe(1);
+    expect(new Date(weekly[0].week).getTime()).toBeLessThan(new Date(weekly[7].week).getTime());
+  });
+});
