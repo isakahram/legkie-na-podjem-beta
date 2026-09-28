@@ -38,7 +38,7 @@ export function ChildHomePage() {
           <h1>Готов к новому<br /><em>воздушному пути?</em></h1>
           <div className="mission-card">
             <span className="mission-card__icon"><Target /></span>
-            <div><small>Задание на сегодня</small><b>{child.assignment.cyclesPerSession} спокойных выдохов</b><p>Лети в своём темпе — спешить не нужно</p></div>
+            <div><small>Задание на сегодня</small><b>{child.assignment.targetBreaths} спокойных выдохов</b><p>Лети в своём темпе — спешить не нужно</p></div>
           </div>
           <button className="button button--primary button--xl" onClick={() => navigate('/child/calibration')}><Play fill="currentColor" /> Начать полёт <ArrowRight /></button>
           <button className="button button--white" onClick={() => setShopOpen(true)}><Palette /> Выбрать образ</button>

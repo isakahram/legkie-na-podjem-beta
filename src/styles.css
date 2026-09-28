@@ -412,3 +412,15 @@ svg { flex: 0 0 auto; }
 .listening-pause span { font-size: 12px; opacity: .75; }
 .player-balloon--waiting { animation: balloon-wait 2.4s ease-in-out infinite; }
 @keyframes balloon-wait { 0%,100% { filter: none; } 50% { filter: drop-shadow(0 10px 14px rgba(70,48,100,.15)); } }
+
+/* Session goal and SVG skin rendering */
+.breath-progress { color: var(--purple); font-size: 14px; white-space: nowrap; }
+.result-score__hero { grid-column: span 2; background: linear-gradient(135deg,#f0efff,#e4fbf5) !important; }
+.result-score__hero b { font-size: 28px; color: var(--purple); }
+.result-time-note { font-size: 11px; opacity: .72; }
+.balloon { overflow: visible; }
+.skin-card--selected { animation: skin-equip .45s ease-out; }
+@keyframes skin-equip { 35% { transform: translateY(-10px) scale(1.04); } 70% { transform: translateY(2px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}

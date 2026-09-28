@@ -31,10 +31,13 @@ const sessionSchema = z.object({
   breathCount: z.number().int().min(0).max(500),
   averageStrength: z.number().min(0).max(1),
   averageBreathDuration: z.number().min(0).max(120).nullable(),
+  bestDuration: z.number().min(0).max(120).nullable().optional(),
   averageStability: z.number().min(0).max(100).nullable(),
   correctBreathPercent: z.number().min(0).max(100),
-  completedCycles: z.number().int().min(0).max(500),
-  targetCycles: z.number().int().min(1).max(500),
+  completedBreaths: z.number().int().min(0).max(20).optional(),
+  targetBreaths: z.number().int().min(4).max(20).optional(),
+  completedCycles: z.number().int().min(0).max(20).optional(),
+  targetCycles: z.number().int().min(4).max(20).optional(),
   coinsCollected: z.number().int().min(0).max(10_000),
   averageLatencyMs: z.number().min(0).max(10_000).nullable(),
   maxLatencyMs: z.number().min(0).max(10_000).nullable(),
@@ -74,7 +77,8 @@ app.get('/api/children/:id/calibration', (request, response) => {
 });
 
 app.post('/api/sessions', (request, response) => {
-  const payload = sessionSchema.parse(request.body);
+  const parsedPayload = sessionSchema.parse(request.body);
+  const payload = { ...parsedPayload, completedBreaths: parsedPayload.completedBreaths ?? parsedPayload.completedCycles ?? 0, targetBreaths: parsedPayload.targetBreaths ?? parsedPayload.targetCycles ?? 8 } as const;
   if (!db.getChild(payload.childId)) return response.status(404).json({ error: 'Профиль не найден' });
   const session = db.insertSession(payload);
   // Demo controls are useful for previewing but must not grant rewards or affect summaries.
