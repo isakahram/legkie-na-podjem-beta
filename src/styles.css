@@ -174,11 +174,32 @@ svg { flex: 0 0 auto; }
 @keyframes sparkle { 50% { transform: scale(.65) rotate(25deg); opacity: .5; } }
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(37,35,70,.42); backdrop-filter: blur(7px); }
 .modal { width: min(720px,100%); position: relative; padding: 34px; border-radius: 27px; background: #fff; box-shadow: 0 35px 90px rgba(32,28,74,.26); }
-.modal__close { position: absolute; top: 20px; right: 20px; border: 0; width: 40px; height: 40px; border-radius: 12px; background: #f2f1f8; cursor: pointer; }
-.shop-modal > div:first-of-type h2 { font: 900 30px 'Nunito'; margin: 8px 0 3px; }
-.shop-modal > div:first-of-type p { color: var(--muted); margin: 0; }
-.shop-modal > .coin-pill { position: absolute; right: 72px; top: 24px; }
+.modal__close { position: absolute; top: 20px; right: 20px; border: 0; width: 40px; height: 40px; border-radius: 12px; background: #f2f1f8; cursor: pointer; flex: 0 0 auto; }
+
+/* Магазин скинов: шапка зафиксирована, список секций скроллится отдельно,
+   чтобы модалка не «вылезала» за пределы экрана и не теряла доступ к контенту. */
+.shop-modal { display: flex; flex-direction: column; max-height: 90vh; padding: 0; overflow: hidden; }
+.shop-modal__header { flex: 0 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 30px 34px 20px; }
+.shop-modal__intro h2 { font: 900 30px 'Nunito'; margin: 8px 0 3px; }
+.shop-modal__intro p { color: var(--muted); margin: 0; }
+.shop-modal__header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
+.shop-modal__header-actions .modal__close { position: static; }
+.shop-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 4px 34px 34px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126,116,168,.35) transparent;
+}
+.shop-modal__body::-webkit-scrollbar { width: 7px; }
+.shop-modal__body::-webkit-scrollbar-track { background: transparent; }
+.shop-modal__body::-webkit-scrollbar-thumb { background: rgba(126,116,168,.35); border-radius: 8px; }
+.shop-modal__body::-webkit-scrollbar-thumb:hover { background: rgba(126,116,168,.55); }
 .shop-section { margin-top: 22px; }
+.shop-section:first-child { margin-top: 4px; }
 .shop-section__title { margin: 0 0 4px; font: 900 16px 'Nunito'; color: var(--purple); }
 .skin-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-top: 10px; }
 .skin-card { position: relative; border: 2px solid transparent; border-radius: 19px; background: #f7f7fc; padding: 15px 9px; cursor: pointer; display: flex; align-items: center; flex-direction: column; transition: .2s ease; }
@@ -367,7 +388,8 @@ svg { flex: 0 0 auto; }
   .privacy-grid{grid-template-columns:1fr}.info-card{padding:28px}.info-card h1{font-size:35px}
   .access-card{margin-top:45px;padding:42px 24px 28px}
   .child-hub{display:block;text-align:center}.child-hub__copy{padding:45px 0 0}.child-hub h1{font-size:44px}.mission-card{margin-inline:auto;text-align:left}.child-hub__scene{height:360px}.hub-balloon{left:45%;top:28%;transform:scale(1.25)}@keyframes hubFloat{0%,100%{transform:scale(1.25) translateY(0)}50%{transform:scale(1.25) translateY(-8px)}}.skin-label{right:10%;bottom:8%}.child-hub__copy>.button{margin-bottom:9px}
-  .skin-grid{grid-template-columns:repeat(2,1fr)}.modal{padding:26px 20px}.shop-modal>.coin-pill{position:static;margin-top:12px}.shop-modal{max-height:90vh;overflow:auto}
+  .skin-grid{grid-template-columns:repeat(2,1fr)}.modal{padding:26px 20px}
+  .shop-modal{padding:0}.shop-modal__header{flex-direction:column;align-items:stretch;padding:22px 20px 16px;gap:12px}.shop-modal__header-actions{width:100%;justify-content:space-between}.shop-modal__header-actions .coin-pill{flex:1;justify-content:flex-start}.shop-modal__body{padding:4px 20px 26px}
   .calibration-card,.result-card{grid-template-columns:1fr;margin-top:10px}.calibration-visual{min-height:250px}.mic-orbit{top:25px;transform:translateX(-50%) scale(.7)}.calibration-balloon{bottom:15px;left:22%;transform:scale(.55)}.calibration-content{padding:32px 25px}.steps{margin-bottom:25px}.result-page{padding:15px}.result-card__visual{min-height:250px}.result-balloon{transform:scale(1)}@keyframes floatResult{50%{transform:scale(1) translateY(-8px)}}.result-halo{width:170px;height:170px}.result-card__content{padding:30px 24px}.result-card h1{font-size:34px}.result-score{grid-template-columns:1fr}.result-actions{flex-direction:column}
   .game-hud{top:12px;left:12px;right:12px}.timer{min-width:61px}.game-coin{transform:translate(-50%,-50%) scale(.78)}.demo-breath{right:50%;transform:translateX(50%);bottom:110px}.demo-breath:active{transform:translateX(50%) translateY(6px)}.breath-bar{bottom:16px}.game-dialog{padding:29px 22px}.game-dialog h1{font-size:28px}
   .clinician-login{background:#f8f9fd}.clinician-login__card{margin:50px auto}.clinician-login__card h1{font-size:37px}.login-side-art{display:none}
