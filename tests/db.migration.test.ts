@@ -117,4 +117,88 @@ describe('миграция старой базы', () => {
     expect(stored.averageStability).toBeNull();
     expect(stored.coinsCollected).toBe(3);
   });
+
+  it('создаёт таблицу schema_migrations и фиксирует применённые миграции', () => {
+    const db = new AppDatabase(path);
+    const migrations = db.db.prepare('SELECT version, name FROM schema_migrations ORDER BY version').all() as Array<{
+      version: number;
+      name: string;
+    }>;
+    expect(migrations.length).toBeGreaterThan(0);
+    expect(migrations[0].version).toBe(1);
+    expect(migrations[0].name).toBe('001_specialist_cabinet_data_model');
+  });
+
+  it('сохраняет обратную совместимость для игровых методов: ВЕТЕР7, сессии, калибровка, магазин', () => {
+    const db = new AppDatabase(path);
+    // Проверка входа по коду ВЕТЕР7
+    const child = db.findChildByCode('ВЕТЕР7');
+    expect(child).not.toBeNull();
+    expect(child!.nickname).toBe('Миша К.');
+    expect(child!.assignment.targetBreaths).toBe(8);
+    expect(child!.skins.length).toBeGreaterThan(0);
+
+    // Сохранение калибровки
+    db.saveCalibration(child!.id, {
+      ambientRms: 0.05,
+      breathRms: 0.45,
+      breathZcr: 0.12,
+      breathCentroid: 1200,
+      breathFlatness: 0.3,
+      quality: 0.9,
+      createdAt: '2026-09-29T11:00:00.000Z',
+    });
+    const cal = db.latestCalibration(child!.id);
+    expect(cal).not.toBeNull();
+    expect(cal!.quality).toBe(0.9);
+
+    // Сохранение сессии
+    const saved = db.insertSession({
+      childId: child!.id,
+      startedAt: '2026-09-29T11:05:00.000Z',
+      durationSeconds: 120,
+      breathCount: 8,
+      averageStrength: 0.6,
+      averageBreathDuration: 2.5,
+      bestDuration: 3.0,
+      averageStability: 75,
+      correctBreathPercent: 85,
+      completedBreaths: 8,
+      targetBreaths: 8,
+      coinsCollected: 10,
+      averageLatencyMs: 50,
+      maxLatencyMs: 90,
+      technicalPauses: 0,
+      status: 'completed',
+      inputMode: 'microphone',
+    });
+    expect(saved.id).toBeTruthy();
+
+    // Магазин: покупка доступного скина
+    const initialBalance = db.getChild(child!.id)!.balance;
+    db.rewardSession(child!.id, 50);
+    const updated = db.buySkin(child!.id, 'sunny');
+    expect(updated.skins.find((s) => s.id === 'sunny')!.owned).toBe(true);
+    expect(updated.balance).toBe(initialBalance + 50 - 12);
+  });
+
+  it('сохраняет 4 базовых демо-пациента и добавляет 5 новых клинических сценариев как отдельных пациентов', () => {
+    const db = new AppDatabase(path);
+    // 4 базовых демо-пациента
+    expect(db.findChildByCode('ВЕТЕР7')).not.toBeNull();
+    expect(db.findChildByCode('ЗВЕЗДА')).not.toBeNull();
+    expect(db.findChildByCode('РАДУГА')).not.toBeNull();
+    expect(db.findChildByCode('ОБЛАКО')).not.toBeNull();
+
+    // 5 новых отдельных сценариев
+    expect(db.findChildByCode('ВЫДОХ1')).not.toBeNull();
+    expect(db.findChildByCode('ПОЛЕТ2')).not.toBeNull();
+    expect(db.findChildByCode('НЕБО3')).not.toBeNull();
+    expect(db.findChildByCode('ЛУЧИК4')).not.toBeNull();
+    expect(db.findChildByCode('ВЕТЕРОК5')).not.toBeNull();
+
+    // Всего не менее 9 пациентов в базе
+    const all = db.listChildren();
+    expect(all.length).toBeGreaterThanOrEqual(9);
+  });
 });
