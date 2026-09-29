@@ -6,6 +6,8 @@ import type {
   PatientSummary,
   WeeklyPoint,
 } from '../../src/types.ts';
+import type { TrendContext } from '../../src/shared/trend.ts';
+import { formatTrendLabel, resolveTrendContext, trendContextFromValues } from '../../src/shared/trend.ts';
 
 /**
  * Пороговые значения по умолчанию для списка «Требуют внимания».
@@ -85,12 +87,44 @@ export function evaluateAttention(
     });
   }
 
-  if (hasAnySession && input.summary.trendPercent <= thresholds.declinePercent) {
+  // Динамика считается только между двумя ПОЛНЫМИ неделями:
+  // сравнение незавершённой недели с полной давало ложное «снижение на 100%».
+  const weeklyTrend = resolveTrendContext(input.weekly);
+  const summaryHasContext = input.summary.trendHasCurrentData !== undefined;
+  const trend: TrendContext = summaryHasContext
+    ? trendContextFromValues({
+        trendPercent: input.summary.trendPercent,
+        previousPercent: input.summary.trendPreviousPercent,
+        currentPercent: input.summary.trendCurrentPercent,
+        hasCurrentData: input.summary.trendHasCurrentData,
+        currentWeekIsPartial: input.summary.trendWeekIsPartial,
+      })
+    : weeklyTrend.state !== 'trend' ||
+        weeklyTrend.trendPercent === input.summary.trendPercent ||
+        // Ряд с флагами неполных недель — новый формат, он авторитетнее плоского числа.
+        input.weekly.some((point) => point.isPartial !== undefined)
+      ? weeklyTrend
+      : {
+          // Сводка посчитана вне недельного ряда — точки неизвестны, но величина валидна.
+          state: 'trend',
+          trendPercent: input.summary.trendPercent,
+          previousPercent: null,
+          currentPercent: null,
+          hasCurrentData: true,
+          currentWeekIsPartial: weeklyTrend.currentWeekIsPartial,
+        };
+
+  const declined = trend.state === 'trend' && trend.trendPercent <= thresholds.declinePercent;
+  // Данных за сравниваемый период нет: это не падение, но врач должен об этом знать.
+  const missingPeriodData = trend.state !== 'trend' && !trend.hasCurrentData;
+
+  if (hasAnySession && (declined || missingPeriodData)) {
     reasons.push({
       code: 'declining_trend',
-      label: `Динамика снизилась на ${Math.abs(Math.round(input.summary.trendPercent))}%`,
-      severity: 'critical',
-      value: input.summary.trendPercent,
+      // Значение остаётся в value, меняется только формулировка.
+      label: formatTrendLabel(trend),
+      severity: declined ? 'critical' : 'warning',
+      value: trend.state === 'trend' ? trend.trendPercent : null,
     });
   }
 

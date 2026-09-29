@@ -727,6 +727,26 @@
   stroke-width: 2;
 }
 
+/* Незавершённая неделя: серый пунктир, чтобы её не читали как провал. */
+.sp-chart__line--partial {
+  stroke: #9aa7b6;
+  stroke-dasharray: 5 4;
+}
+
+.sp-chart__point--partial {
+  stroke: #9aa7b6;
+  stroke-dasharray: 2 2;
+}
+
+.sp-chart__bar--partial {
+  fill: #cdd8e4;
+}
+
+.sp-chart__partial-note {
+  color: var(--sp-muted);
+  font-style: italic;
+}
+
 .sp-chart__legend {
   display: flex;
   gap: 16px;

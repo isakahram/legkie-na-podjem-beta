@@ -2,7 +2,7 @@ import { Activity, CalendarCheck, Target, TriangleAlert, Wind } from 'lucide-rea
 import { Link } from 'react-router-dom';
 import type { PatientV1DetailDto } from '../../../types';
 import { KpiCard, Panel, StatusPill, ValidationNote } from '../../components/ui';
-import { formatDateTime, formatDuration, formatPercent, formatSeconds, formatTrend } from '../../lib/format';
+import { formatDateTime, formatDuration, formatPercent, formatSeconds, formatTrendContext } from '../../lib/format';
 
 /** Занятия текущей недели для короткой ленты. */
 const recentSessions = (detail: PatientV1DetailDto) =>
@@ -14,6 +14,14 @@ export function OverviewTab({ detail }: { detail: PatientV1DetailDto }) {
   const { patient } = detail;
   const { summary, assignment, attention } = patient;
   const weeklyBreaths = detail.weekly.at(-1)?.breaths ?? 0;
+  // Динамика формулируется словами: «-100%» без данных за период вводит врача в заблуждение.
+  const trendLabel = formatTrendContext({
+    trendPercent: summary.trendPercent,
+    previousPercent: summary.trendPreviousPercent,
+    currentPercent: summary.trendCurrentPercent,
+    hasCurrentData: summary.trendHasCurrentData,
+    currentWeekIsPartial: summary.trendWeekIsPartial,
+  });
 
   return (
     <div className="sp-stack">
@@ -35,7 +43,7 @@ export function OverviewTab({ detail }: { detail: PatientV1DetailDto }) {
           icon={<Activity size={18} aria-hidden />}
           label="Стабильность"
           value={formatPercent(summary.averageStability)}
-          note={formatTrend(summary.trendPercent)}
+          note={trendLabel}
         />
         <KpiCard
           icon={<Target size={18} aria-hidden />}
@@ -86,6 +94,9 @@ export function OverviewTab({ detail }: { detail: PatientV1DetailDto }) {
         </Panel>
 
         <Panel title="Статус регулярности" subtitle="Автоматическая оценка">
+          <p className="sp-hint">
+            Динамика: <strong>{trendLabel}</strong>
+          </p>
           {attention.needsAttention ? (
             <ul className="sp-reason-list">
               {attention.reasons.map((reason) => (

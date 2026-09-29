@@ -103,6 +103,7 @@ export function buildPlanFact(
     planSessions: sessionsPerWeek,
     factBreaths: point.breaths,
     planBreaths: sessionsPerWeek * targetBreaths,
+    isPartial: point.isPartial === true,
   }));
 }
 
@@ -141,7 +142,16 @@ export function paginateSessions(
 export function buildReportSummary(
   sessions: SessionRecord[],
   weekly: WeeklyPoint[],
-  options: { from: Date; to: Date; sessionsPerWeek: number; trendPercent: number },
+  options: {
+    from: Date;
+    to: Date;
+    sessionsPerWeek: number;
+    trendPercent: number;
+    trendPreviousPercent?: number | null;
+    trendCurrentPercent?: number | null;
+    trendHasCurrentData?: boolean;
+    trendWeekIsPartial?: boolean;
+  },
 ): ReportSummary {
   const selected = sessions.filter(isCountableSession).filter((session) => inRange(session, options.from, options.to));
   const weeks = Math.max(1, Math.round((options.to.getTime() - options.from.getTime()) / (7 * 86_400_000)));
@@ -163,6 +173,10 @@ export function buildReportSummary(
     averageStability: averageOrNull(selected.map((session) => session.averageStability), 0),
     totalBreaths: selected.reduce((sum, session) => sum + breathsOf(session), 0),
     trendPercent: options.trendPercent,
+    trendPreviousPercent: options.trendPreviousPercent ?? null,
+    trendCurrentPercent: options.trendCurrentPercent ?? null,
+    trendHasCurrentData: options.trendHasCurrentData,
+    trendWeekIsPartial: options.trendWeekIsPartial,
     weekly: weeksInRange.length > 0 ? weeksInRange : weekly,
   };
 }
