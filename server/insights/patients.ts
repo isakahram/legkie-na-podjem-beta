@@ -107,7 +107,9 @@ export function applyPatientSort(
   return sorted;
 }
 
-const PAGE_SIZE_LIMIT = 100;
+// Держим в согласии с максимумом pageSize в Zod-схеме server/routes/v1/patients.ts —
+// клиент запрашивает pageSize=200 для фильтра «Ребёнок» на странице «Занятия».
+const PAGE_SIZE_LIMIT = 500;
 
 /** Поиск, фильтры, сортировка и пагинация списка пациентов. */
 export function queryPatients(

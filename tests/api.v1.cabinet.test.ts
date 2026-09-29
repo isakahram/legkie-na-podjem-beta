@@ -122,6 +122,15 @@ describe('GET /api/v1/patients — поиск, фильтры, пагинаци�
     expect(data.items[0]).toHaveProperty('attention.needsAttention');
   });
 
+  it('pageSize=200 (как запрашивает фильтр «Ребёнок» на странице «Занятия») — 200, не 400', async () => {
+    const res = await fetch(`${baseUrl}/patients?pageSize=200`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.pageSize).toBe(200);
+    expect(data.items.length).toBeLessThanOrEqual(200);
+  });
+
   it('поиск по псевдониму', async () => {
     const res = await fetch(`${baseUrl}/patients?search=${encodeURIComponent('Артём')}`, authed(mariaToken));
     const data = (await res.json()) as any;
@@ -382,6 +391,16 @@ describe('Аналитика, журнал занятий и отчёты кар
       expect(String(id).startsWith('patient-maria-') || String(id).length === 36).toBe(true);
     }
     expect(ids.has('patient-progress')).toBe(false);
+  });
+
+  it('pageSize=500 (как запрашивает кнопка «Выгрузить CSV») — 200, не 400', async () => {
+    const res = await fetch(`${baseUrl}/sessions?page=1&pageSize=500`, authed(mariaToken));
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as any;
+    expect(data.pageSize).toBe(500);
+    expect(data.page).toBe(1);
+    expect(data.items.length).toBeLessThanOrEqual(500);
   });
 
   it('GET /sessions?patientId=чужой — 403', async () => {
