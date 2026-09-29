@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, getISODay, parseISO } from 'date-fns';
+import { getISODay, parseISO } from 'date-fns';
 import type {
   AttentionReason,
   AttentionThresholds,
@@ -45,15 +45,15 @@ const pluralDays = (count: number): string => {
   return 'дней';
 };
 
-/**
- * Количество календарных дней с последнего занятия.
- * null означает, что занятий не было вовсе.
- */
 export function daysSinceLastSession(lastSessionAt: string | null, now: Date): number | null {
   if (!lastSessionAt) return null;
   const parsed = parseISO(lastSessionAt);
   if (Number.isNaN(parsed.getTime())) return null;
-  return Math.max(0, differenceInCalendarDays(now, parsed));
+
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const thenUtc = Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
+  const diff = Math.floor((nowUtc - thenUtc) / 86_400_000);
+  return Math.max(0, diff);
 }
 
 /**
