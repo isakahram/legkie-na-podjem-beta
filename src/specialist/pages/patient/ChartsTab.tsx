@@ -38,6 +38,8 @@ export function ChartsTab({ patientId, detail }: { patientId: string; detail: Pa
   if (!analytics) return <Spinner label="Считаем динамику…" />;
 
   const { weekly, planFact, comparison } = analytics;
+  // Незавершённая неделя помечается флагом на сервере: графики рисуют её пунктиром.
+  const hasPartialWeek = weekly.some((point) => point.isPartial) || planFact.some((point) => point.isPartial);
 
   return (
     <div className="sp-stack">
@@ -49,10 +51,12 @@ export function ChartsTab({ patientId, detail }: { patientId: string; detail: Pa
             points={weekly.map((point) => ({
               label: point.label,
               value: point.averageBreathDuration ?? 0,
+              partial: point.isPartial === true,
             }))}
           />
           <p className="sp-hint">
             Показатель усредняется по завершённым выдохам недели; недели без занятий отображаются нулём.
+            {hasPartialWeek ? ' Текущая неделя не завершена — последняя точка показана пунктиром.' : ''}
           </p>
         </Panel>
 
@@ -60,7 +64,11 @@ export function ChartsTab({ patientId, detail }: { patientId: string; detail: Pa
           <LineSeriesChart
             ariaLabel="Динамика стабильности выдоха по неделям"
             unit="%"
-            points={weekly.map((point) => ({ label: point.label, value: point.averageStability ?? 0 }))}
+            points={weekly.map((point) => ({
+              label: point.label,
+              value: point.averageStability ?? 0,
+              partial: point.isPartial === true,
+            }))}
           />
         </Panel>
       </div>
@@ -74,17 +82,24 @@ export function ChartsTab({ patientId, detail }: { patientId: string; detail: Pa
               label: point.label,
               value: point.factBreaths,
               target: point.planBreaths,
+              partial: point.isPartial === true,
             }))}
           />
         </Panel>
 
-        <Panel title="Регулярность" subtitle="Занятия против плана">
+        <Panel
+          title="Регулярность"
+          subtitle={
+            hasPartialWeek ? 'Занятия против плана · текущая неделя не завершена' : 'Занятия против плана'
+          }
+        >
           <BarSeriesChart
             ariaLabel="Количество занятий по неделям в сравнении с назначением"
             points={planFact.map((point) => ({
               label: point.label,
               value: point.factSessions,
               target: point.planSessions,
+              partial: point.isPartial === true,
             }))}
           />
         </Panel>

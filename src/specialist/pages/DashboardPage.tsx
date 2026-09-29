@@ -23,11 +23,19 @@ const PERIOD_OPTIONS: Array<{ value: DashboardPeriod; label: string }> = [
   { value: '8weeks', label: '8 недель' },
 ];
 
+/** Подпись периода для KPI: без неё «25%» читается как «за всё время». */
+const PERIOD_NOTES: Record<DashboardPeriod, string> = {
+  week: 'за неделю',
+  month: 'за 4 недели',
+  '8weeks': 'за 8 недель',
+};
+
 export function DashboardPage() {
   const [period, setPeriod] = usePersistentState<DashboardPeriod>('sp-dashboard-period', 'week');
   const [data, setData] = useState<DashboardDto | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const periodNote = PERIOD_NOTES[period];
 
   useEffect(() => {
     let cancelled = false;
@@ -84,21 +92,21 @@ export function DashboardPage() {
               tone="positive"
               label="Занятий за период"
               value={`${data.kpi.sessionsInPeriod}`}
-              note={`план: ${data.kpi.targetSessionsInPeriod}`}
+              note={`план ${periodNote}: ${data.kpi.targetSessionsInPeriod}`}
             />
             <KpiCard
               icon={<Activity size={18} aria-hidden />}
               tone="neutral"
               label="Средняя регулярность"
               value={formatPercent(data.kpi.averageAdherencePercent)}
-              note="доля выполненного недельного плана"
+              note={`доля выполненного плана ${periodNote}`}
             />
             <KpiCard
               icon={<TriangleAlert size={18} aria-hidden />}
               tone="warning"
               label="Пропуски"
               value={`${data.kpi.missedSessions}`}
-              note={`требуют внимания: ${data.kpi.attentionCount}`}
+              note={`из ${data.kpi.targetSessionsInPeriod} плановых ${periodNote} · требуют внимания: ${data.kpi.attentionCount}`}
             />
           </section>
 

@@ -105,6 +105,10 @@ export function createReportsRouter(): Router {
         to,
         sessionsPerWeek: view.sessionsPerWeek,
         trendPercent: view.summary.trendPercent,
+        trendPreviousPercent: view.summary.trendPreviousPercent,
+        trendCurrentPercent: view.summary.trendCurrentPercent,
+        trendHasCurrentData: view.summary.trendHasCurrentData,
+        trendWeekIsPartial: view.summary.trendWeekIsPartial,
       });
 
       const created = database.createReportSnapshot({

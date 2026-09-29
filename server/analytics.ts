@@ -9,6 +9,7 @@ import {
 } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Assignment, PatientSummary, SessionRecord, WeeklyPoint } from '../src/types.ts';
+import { resolveTrendContext } from '../src/shared/trend.ts';
 
 const average = (values: number[]): number =>
   values.length === 0 ? 0 : values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -67,11 +68,13 @@ export function calculatePatientAnalytics(
       targetBreaths: targetBreaths * assignment.sessionsPerWeek,
       cycles: inWeek.reduce((sum, session) => sum + (session.completedBreaths ?? session.completedCycles ?? 0), 0),
       targetCycles: targetBreaths * assignment.sessionsPerWeek,
+      // Неделя, которая ещё не закончилась, помечается как неполная:
+      // по ней нельзя судить о динамике и её нельзя рисовать сплошной линией.
+      isPartial: isAfter(weekEnd, now),
     };
   });
 
-  const previous = weekly.at(-2)?.averageCorrect ?? 0;
-  const current = weekly.at(-1)?.averageCorrect ?? 0;
+  const trend = resolveTrendContext(weekly);
   const lastSession = [...eligible].sort(
     (a, b) => parseISO(b.startedAt).getTime() - parseISO(a.startedAt).getTime(),
   )[0];
@@ -92,7 +95,11 @@ export function calculatePatientAnalytics(
       cycleCompletionPercent: totalTargetCycles === 0 ? 0 : Math.min(100, round((totalCompletedCycles / totalTargetCycles) * 100)),
       missedThisWeek: Math.max(0, assignment.sessionsPerWeek - thisWeek.length),
       lastSessionAt: lastSession?.startedAt ?? null,
-      trendPercent: previous === 0 ? 0 : round(((current - previous) / previous) * 100),
+      trendPercent: trend.trendPercent,
+      trendPreviousPercent: trend.previousPercent,
+      trendCurrentPercent: trend.currentPercent,
+      trendHasCurrentData: trend.hasCurrentData,
+      trendWeekIsPartial: trend.currentWeekIsPartial,
     },
     weekly,
   };

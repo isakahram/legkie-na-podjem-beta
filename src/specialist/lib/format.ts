@@ -1,4 +1,6 @@
 import { pluralize } from '../../utils/pluralize';
+import type { TrendContext } from '../../shared/trend';
+import { formatTrendLabel, trendContextFromValues } from '../../shared/trend';
 
 /** Пол человека в карточке пациента. */
 export const GENDER_LABELS: Record<string, string> = {
@@ -65,11 +67,26 @@ export function formatPercent(value: number | null | undefined): string {
   return `${Math.round(value)}%`;
 }
 
-/** Форматирует изменение показателя с понятным направлением динамики. */
+/**
+ * Форматирует изменение показателя с понятным направлением динамики.
+ * Сигнатура сохранена намеренно: старые вызовы и тесты не должны меняться.
+ * Развёрнутую формулировку «Снижение с X% до Y%» даёт formatTrendLabel.
+ */
 export function formatTrend(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return EMPTY_VALUE;
   if (value === 0) return 'без изменений';
   return value > 0 ? `рост +${Math.round(value)}%` : `снижение ${Math.round(value)}%`;
+}
+
+/**
+ * Формулировка динамики по контексту полных недель.
+ * Обёртка над общим модулем: UI не должен знать правил выбора недель.
+ */
+export function formatTrendContext(
+  input: Parameters<typeof trendContextFromValues>[0] | TrendContext,
+): string {
+  const context = 'state' in input ? input : trendContextFromValues(input);
+  return formatTrendLabel(context);
 }
 
 /** Форматирует возраст с правильным русским склонением. */

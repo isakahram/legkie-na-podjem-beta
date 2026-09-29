@@ -22,8 +22,8 @@ export interface SessionPayload {
   technicalPauses: number; status: 'completed' | 'stopped'; inputMode: 'microphone' | 'demo';
 }
 export interface SessionRecord extends SessionPayload { id: string; childNickname?: string; }
-export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; averageBreathDuration?: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; }
-export interface PatientSummary { sessionsThisWeek: number; targetSessions: number; adherencePercent: number; averageCorrectPercent: number; averageBreathDuration: number | null; bestDuration?: number | null; averageStability: number | null; averageSessionDuration: number; breathCompletionPercent: number; cycleCompletionPercent?: number; missedThisWeek: number; lastSessionAt: string | null; trendPercent: number; }
+export interface WeeklyPoint { week: string; label: string; sessions: number; target: number; averageCorrect: number; averageDuration: number; averageStability: number | null; averageBreathDuration?: number | null; breaths: number; targetBreaths?: number; cycles?: number; targetCycles?: number; /** Неделя ещё не завершилась: точка неполная, выводы по ней делать нельзя. */ isPartial?: boolean; }
+export interface PatientSummary { sessionsThisWeek: number; targetSessions: number; adherencePercent: number; averageCorrectPercent: number; averageBreathDuration: number | null; bestDuration?: number | null; averageStability: number | null; averageSessionDuration: number; breathCompletionPercent: number; cycleCompletionPercent?: number; missedThisWeek: number; lastSessionAt: string | null; trendPercent: number; /** Показатель предыдущей полной недели, %. */ trendPreviousPercent?: number | null; /** Показатель последней полной недели, %. */ trendCurrentPercent?: number | null; /** Есть ли занятия в сравниваемых полных неделях. */ trendHasCurrentData?: boolean; /** Текущая (последняя) неделя ряда ещё не завершена. */ trendWeekIsPartial?: boolean; }
 export interface ApiErrorBody { error: string; details?: unknown; }
 
 // ==========================================
@@ -280,6 +280,8 @@ export interface PlanFactPoint {
   planSessions: number;
   factBreaths: number;
   planBreaths: number;
+  /** Неделя ещё не завершена — столбик факта заведомо ниже плана. */
+  isPartial?: boolean;
 }
 
 export interface PatientAnalyticsDto {
@@ -316,6 +318,14 @@ export interface ReportSummary {
   averageStability: number | null;
   totalBreaths: number;
   trendPercent: number;
+  /** Показатель предыдущей полной недели, %. */
+  trendPreviousPercent?: number | null;
+  /** Показатель последней полной недели, %. */
+  trendCurrentPercent?: number | null;
+  /** Есть ли занятия в сравниваемых полных неделях. */
+  trendHasCurrentData?: boolean;
+  /** Последняя неделя ряда не завершена. */
+  trendWeekIsPartial?: boolean;
   weekly: WeeklyPoint[];
 }
 

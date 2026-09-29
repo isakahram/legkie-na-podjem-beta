@@ -12,7 +12,7 @@ import {
   Spinner,
   ValidationNote,
 } from '../../components/ui';
-import { formatDate, formatDateTime, formatPercent, formatSeconds } from '../../lib/format';
+import { formatDate, formatDateTime, formatPercent, formatSeconds, formatTrendContext } from '../../lib/format';
 import { openPrintableReport } from '../../lib/pdf';
 
 type ReportPeriod = '4' | '8' | '12';
@@ -152,8 +152,13 @@ export function ReportsTab({ patientId, detail }: { patientId: string; detail: P
                   <tr>
                     <th scope="row">Динамика</th>
                     <td>
-                      {active.data.trendPercent > 0 ? '+' : ''}
-                      {active.data.trendPercent}%
+                      {formatTrendContext({
+                        trendPercent: active.data.trendPercent,
+                        previousPercent: active.data.trendPreviousPercent,
+                        currentPercent: active.data.trendCurrentPercent,
+                        hasCurrentData: active.data.trendHasCurrentData,
+                        currentWeekIsPartial: active.data.trendWeekIsPartial,
+                      })}
                     </td>
                   </tr>
                 </tbody>

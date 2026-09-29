@@ -80,3 +80,26 @@ describe('calculatePatientAnalytics', () => {
     expect(new Date(weekly[0].week).getTime()).toBeLessThan(new Date(weekly[7].week).getTime());
   });
 });
+
+describe('Незавершённая неделя в недельном ряду', () => {
+  it('последняя точка помечена isPartial, если неделя ещё не закончилась', () => {
+    const now = new Date('2026-09-30T12:00:00.000Z'); // среда
+    const { weekly } = calculatePatientAnalytics([], assignment, now);
+    expect(weekly.at(-1)?.isPartial).toBe(true);
+    expect(weekly.slice(0, -1).every((point) => point.isPartial === false)).toBe(true);
+  });
+
+  it('в последний момент недели точка считается завершённой', () => {
+    const now = new Date('2026-10-04T23:59:59.999Z'); // воскресенье, конец ISO-недели
+    const { weekly } = calculatePatientAnalytics([], assignment, now);
+    expect(weekly.at(-1)?.isPartial).toBe(false);
+  });
+
+  it('незавершённая неделя не даёт ложного −100% в сводке', () => {
+    const now = new Date('2026-09-30T12:00:00.000Z');
+    const { summary } = calculatePatientAnalytics([], assignment, now);
+    expect(summary.trendPercent).toBe(0);
+    expect(summary.trendHasCurrentData).toBe(false);
+    expect(summary.trendWeekIsPartial).toBe(true);
+  });
+});
