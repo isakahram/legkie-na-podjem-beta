@@ -1,12 +1,4 @@
-import {
-  endOfWeek,
-  format,
-  isAfter,
-  isBefore,
-  parseISO,
-  startOfWeek,
-  subWeeks,
-} from 'date-fns';
+import { format, isAfter, isBefore, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Assignment, PatientSummary, SessionRecord, WeeklyPoint } from '../src/types.ts';
 import { resolveTrendContext } from '../src/shared/trend.ts';
@@ -28,6 +20,45 @@ const round = (value: number, precision = 0): number => {
   return Math.round(value * factor) / factor;
 };
 
+/** Понедельник ISO-недели для указанной даты, 00:00:00.000 UTC. */
+const startOfWeekUtc = (date: Date): Date => {
+  const isoDay = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() - (isoDay - 1),
+    ),
+  );
+};
+
+/** Воскресенье ISO-недели для указанной даты, 23:59:59.999 UTC. */
+const endOfWeekUtc = (date: Date): Date => {
+  const isoDay = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  const daysUntilSunday = 7 - isoDay;
+  return new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() + daysUntilSunday,
+      23,
+      59,
+      59,
+      999,
+    ),
+  );
+};
+
+/** Сдвиг даты на N недель назад в UTC (сохраняет день недели). */
+const subWeeksUtc = (date: Date, weeks: number): Date =>
+  new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() - weeks * 7,
+    ),
+  );
+
 /**
  * Calculates clinician-facing metrics from completed microphone sessions only.
  * Demo sessions remain visible in the log but never affect health-adjacent summaries.
@@ -41,16 +72,16 @@ export function calculatePatientAnalytics(
   const eligible = sessions.filter(
     (session) => session.status === 'completed' && session.inputMode === 'microphone',
   );
-  const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
-  const currentWeekEnd = endOfWeek(now, { weekStartsOn: 1 });
+  const currentWeekStart = startOfWeekUtc(now);
+  const currentWeekEnd = endOfWeekUtc(now);
   const thisWeek = eligible.filter((session) => {
     const date = parseISO(session.startedAt);
     return !isBefore(date, currentWeekStart) && !isAfter(date, currentWeekEnd);
   });
 
   const weekly: WeeklyPoint[] = Array.from({ length: 8 }, (_, index) => {
-    const weekStart = startOfWeek(subWeeks(now, 7 - index), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const weekStart = startOfWeekUtc(subWeeksUtc(now, 7 - index));
+    const weekEnd = endOfWeekUtc(weekStart);
     const inWeek = eligible.filter((session) => {
       const date = parseISO(session.startedAt);
       return !isBefore(date, weekStart) && !isAfter(date, weekEnd);
