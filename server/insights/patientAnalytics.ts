@@ -131,7 +131,9 @@ export function paginateSessions(
   pageSize = 20,
 ): { items: SessionRecord[]; total: number; page: number; pageSize: number } {
   const total = sessions.length;
-  const size = Math.min(200, Math.max(1, Math.floor(pageSize)));
+  // Держим в согласии с максимумом pageSize в Zod-схеме server/routes/v1/sessions.ts —
+  // кнопка «Выгрузить CSV» запрашивает pageSize=500, чтобы получить все записи разом.
+  const size = Math.min(500, Math.max(1, Math.floor(pageSize)));
   const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(pages, Math.max(1, Math.floor(page)));
   const offset = (current - 1) * size;

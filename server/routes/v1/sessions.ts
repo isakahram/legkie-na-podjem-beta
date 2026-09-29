@@ -12,7 +12,7 @@ const sessionsQuerySchema = z.object({
   maxDurationSeconds: z.coerce.number().min(0).max(7200).optional(),
   minBreaths: z.coerce.number().int().min(0).max(500).optional(),
   page: z.coerce.number().int().min(1).optional(),
-  pageSize: z.coerce.number().int().min(1).max(200).optional(),
+  pageSize: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 export function createSessionsRouter(): Router {

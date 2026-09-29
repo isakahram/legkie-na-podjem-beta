@@ -32,7 +32,7 @@ const listQuerySchema = z.object({
   sort: z.enum(['lastSession', 'adherence', 'age', 'pseudonym']).optional(),
   direction: z.enum(['asc', 'desc']).optional(),
   page: z.coerce.number().int().min(1).optional(),
-  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  pageSize: z.coerce.number().int().min(1).max(500).optional(),
 });
 
 /** Пороги «Требуют внимания» из настроек уведомлений специалиста. */
