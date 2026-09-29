@@ -6,6 +6,7 @@ import type {
   SpecialistProfileDto,
   SpecialistSettingsDto,
   CreatePatientInput,
+  UpdatePatientInput,
   DashboardDto,
   DashboardPeriod,
   PatientListResponse,
@@ -111,6 +112,12 @@ export const api = {
         body: JSON.stringify(input),
       }),
     getPatient: (id: string) => request<PatientV1DetailDto>(`/api/v1/patients/${id}`),
+    updatePatient: (id: string, input: UpdatePatientInput) =>
+      request<{ ok: true }>(`/api/v1/patients/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    deletePatient: (id: string) => request<{ ok: true }>(`/api/v1/patients/${id}`, { method: 'DELETE' }),
 
     getPatientAnalytics: (id: string) =>
       request<PatientAnalyticsDto>(`/api/v1/patients/${id}/analytics`),

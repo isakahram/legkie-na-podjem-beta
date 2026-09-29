@@ -54,6 +54,7 @@ export interface PatientRow {
   balance: number;
   selected_skin: string;
   created_at: string;
+  archived_at: string | null;
   sessions_per_week: number;
   target_breaths: number;
   min_completed_breath_seconds: number;
@@ -254,14 +255,21 @@ export class AppDatabase {
   hasPatientAccess(userId: string, patientId: string): boolean {
     const user = this.findUserById(userId);
     if (!user) return false;
-    if (user.role === 'admin') return true;
-    const access = this.db
-      .prepare('SELECT 1 FROM patient_access WHERE user_id = ? AND patient_id = ?')
-      .get(userId, patientId);
+
+    const access = user.role === 'admin'
+      ? this.db.prepare('SELECT 1 FROM patients WHERE id = ? AND archived_at IS NULL').get(patientId)
+      : this.db
+          .prepare(
+            `SELECT 1
+             FROM patient_access pa
+             JOIN patients p ON p.id = pa.patient_id
+             WHERE pa.user_id = ? AND pa.patient_id = ? AND p.archived_at IS NULL`,
+          )
+          .get(userId, patientId);
     return Boolean(access);
   }
 
-  listPatientsForUser(userId: string): Array<{
+  listPatientsForUser(userId: string, options: { includeArchived?: boolean } = {}): Array<{
     id: string;
     pseudonym: string;
     code: string;
@@ -271,6 +279,7 @@ export class AppDatabase {
     balance: number;
     selectedSkin: string;
     createdAt: string;
+    archivedAt: string | null;
     assignment: {
       sessionsPerWeek: number;
       targetBreaths: number;
@@ -283,12 +292,13 @@ export class AppDatabase {
   }> {
     const user = this.findUserById(userId);
     if (!user) return [];
+    const includeArchived = user.role === 'admin' && options.includeArchived === true;
 
     let rows: PatientRow[];
     if (user.role === 'admin') {
       rows = this.db
         .prepare(
-          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at,
+          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at, p.archived_at,
                   COALESCE(gac.code, '') AS code,
                   COALESCE(av.sessions_per_week, 3) AS sessions_per_week,
                   COALESCE(av.target_breaths, 8) AS target_breaths,
@@ -305,13 +315,14 @@ export class AppDatabase {
              ORDER BY av2.valid_from DESC, av2.created_at DESC
              LIMIT 1
            )
+           WHERE ${includeArchived ? '1' : 'p.archived_at IS NULL'}
            ORDER BY p.pseudonym`,
         )
         .all() as unknown as PatientRow[];
     } else {
       rows = this.db
         .prepare(
-          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at,
+          `SELECT p.id, p.pseudonym, p.age, p.gender, p.avatar, p.balance, p.selected_skin, p.created_at, p.archived_at,
                   COALESCE(gac.code, '') AS code,
                   COALESCE(av.sessions_per_week, 3) AS sessions_per_week,
                   COALESCE(av.target_breaths, 8) AS target_breaths,
@@ -329,6 +340,7 @@ export class AppDatabase {
              ORDER BY av2.valid_from DESC, av2.created_at DESC
              LIMIT 1
            )
+           WHERE p.archived_at IS NULL
            ORDER BY p.pseudonym`,
         )
         .all(userId) as unknown as PatientRow[];
@@ -344,6 +356,7 @@ export class AppDatabase {
       balance: row.balance,
       selectedSkin: row.selected_skin,
       createdAt: row.created_at,
+      archivedAt: row.archived_at,
       assignment: {
         sessionsPerWeek: row.sessions_per_week,
         targetBreaths: row.target_breaths,
@@ -354,6 +367,29 @@ export class AppDatabase {
         note: row.note,
       },
     }));
+  }
+
+  /** Обновление отображаемого профиля активного пациента. */
+  updatePatientProfile(
+    patientId: string,
+    profile: { pseudonym: string; age: number; gender: 'male' | 'female' | 'unspecified' },
+  ): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE patients
+         SET pseudonym = ?, age = ?, gender = ?
+         WHERE id = ? AND archived_at IS NULL`,
+      )
+      .run(profile.pseudonym, profile.age, profile.gender, patientId);
+    return Number(result.changes) > 0;
+  }
+
+  /** Мягкое удаление: клинические сессии и назначения остаются в архиве. */
+  archivePatient(patientId: string, archivedAt = new Date().toISOString()): boolean {
+    const result = this.db
+      .prepare('UPDATE patients SET archived_at = ? WHERE id = ? AND archived_at IS NULL')
+      .run(archivedAt, patientId);
+    return Number(result.changes) > 0;
   }
 
   // ==========================================

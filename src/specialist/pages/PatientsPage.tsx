@@ -1,6 +1,6 @@
 import { ChevronRight, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api } from '../../api';
 import type {
   PatientListResponse,
@@ -39,7 +39,9 @@ const SORTS: Array<{ value: PatientsSort; label: string }> = [
 
 export function PatientsPage() {
   const { canMutate } = useSpecialistAuth();
+  const location = useLocation();
   const viewport = useViewport();
+  const notice = (location.state as { notice?: string } | null)?.notice;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<PatientsFilter>('all');
   const [sort, setSort] = useState<PatientsSort>('lastSession');
@@ -87,6 +89,8 @@ export function PatientsPage() {
           </button>
         )}
       </div>
+
+      {notice && <div className="sp-notice" role="status">{notice}</div>}
 
       <Panel
         actions={

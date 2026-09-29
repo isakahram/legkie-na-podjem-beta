@@ -418,6 +418,14 @@
   font-size: 0.88rem;
 }
 
+.sp-notice {
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--sp-positive-soft);
+  color: #2f7455;
+  font-size: 0.88rem;
+}
+
 /* --- Управление --------------------------------------------------------- */
 
 .sp-segmented {
@@ -476,6 +484,17 @@
 .sp-button--primary:hover {
   background: #3574b1;
   border-color: #3574b1;
+}
+
+.sp-button--danger {
+  border-color: var(--sp-critical);
+  background: var(--sp-critical);
+  color: #fff;
+}
+
+.sp-button--danger:hover {
+  border-color: #a34231;
+  background: #a34231;
 }
 
 .sp-button:disabled {
@@ -993,6 +1012,25 @@
   gap: 10px;
 }
 
+.sp-danger-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sp-border);
+}
+
+.sp-danger-zone b {
+  color: var(--sp-critical);
+}
+
+.sp-danger-zone p {
+  margin: 0;
+  color: var(--sp-muted);
+  font-size: 0.82rem;
+}
+
 .sp-code {
   margin: 10px 0 18px;
   padding: 14px;
@@ -1076,6 +1114,7 @@
 }
 
 .sp-patient-hero {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -1128,6 +1167,7 @@
   border-radius: 12px;
   background: var(--sp-accent-soft);
   min-width: 230px;
+  margin-right: 34px;
 }
 
 .sp-patient-hero__assignment small {
@@ -1146,6 +1186,68 @@
 .sp-patient-hero__assignment span {
   color: var(--sp-muted);
   font-size: 0.8rem;
+}
+
+.sp-patient-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
+
+.sp-patient-actions__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--sp-border);
+  border-radius: 9px;
+  background: var(--sp-surface);
+  color: var(--sp-muted);
+  cursor: pointer;
+}
+
+.sp-patient-actions__trigger:hover {
+  color: var(--sp-text);
+  border-color: #cfdcea;
+}
+
+.sp-patient-actions__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  padding: 5px;
+  border: 1px solid var(--sp-border);
+  border-radius: 10px;
+  background: var(--sp-surface);
+  box-shadow: var(--sp-shadow);
+}
+
+.sp-patient-actions__menu button,
+.sp-patient-actions__menu a {
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--sp-text);
+  font: inherit;
+  font-size: 0.87rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sp-patient-actions__menu button:hover,
+.sp-patient-actions__menu a:hover {
+  background: var(--sp-bg);
+}
+
+.sp-patient-actions__menu .sp-patient-actions__delete {
+  color: var(--sp-critical);
 }
 
 .sp-tabs {

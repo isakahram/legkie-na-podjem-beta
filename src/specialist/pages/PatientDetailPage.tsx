@@ -1,9 +1,11 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, useParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import type { AssignmentVersionDto, PatientV1DetailDto } from '../../types';
+import { EditPatientDialog } from '../components/EditPatientDialog';
 import { AttentionBadge, ErrorBanner, Spinner, StatusPill } from '../components/ui';
+import { useSpecialistAuth } from '../AuthContext';
 import { GENDER_LABELS, formatAge, formatDate } from '../lib/format';
 import { AssignmentsTab } from './patient/AssignmentsTab';
 import { ChartsTab } from './patient/ChartsTab';
@@ -24,8 +26,13 @@ const activeAssignment = (assignments: AssignmentVersionDto[]): AssignmentVersio
 
 export function PatientDetailPage() {
   const { id = '', tab } = useParams();
+  const navigate = useNavigate();
+  const { canMutate } = useSpecialistAuth();
   const [detail, setDetail] = useState<PatientV1DetailDto | null>(null);
   const [error, setError] = useState('');
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirmRequested, setDeleteConfirmRequested] = useState(false);
 
   const load = useCallback(() => {
     return api.v1
@@ -95,6 +102,49 @@ export function PatientDetailPage() {
             {patient.assignment.minCompletedBreathSeconds} с
           </span>
         </div>
+        {canMutate && (
+          <div className="sp-patient-actions">
+            <button
+              type="button"
+              className="sp-patient-actions__trigger"
+              aria-label="Действия с пациентом"
+              aria-expanded={actionsOpen}
+              onClick={() => setActionsOpen((open) => !open)}
+            >
+              <MoreHorizontal size={20} aria-hidden />
+            </button>
+            {actionsOpen && (
+              <div className="sp-patient-actions__menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setDeleteConfirmRequested(false);
+                    setEditOpen(true);
+                  }}
+                >
+                  Редактировать профиль
+                </button>
+                <Link role="menuitem" to={`/specialist/patients/${id}/assignments`} onClick={() => setActionsOpen(false)}>
+                  Изменить назначение
+                </Link>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="sp-patient-actions__delete"
+                  onClick={() => {
+                    setActionsOpen(false);
+                    setDeleteConfirmRequested(true);
+                    setEditOpen(true);
+                  }}
+                >
+                  Удалить пациента
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       <nav className="sp-tabs" aria-label="Разделы карточки">
@@ -117,6 +167,24 @@ export function PatientDetailPage() {
         {current === 'reports' && <ReportsTab patientId={id} detail={detail} />}
         {current === 'assignments' && <AssignmentsTab patientId={id} detail={detail} onChanged={load} />}
       </div>
+
+      {editOpen && (
+        <EditPatientDialog
+          patientId={id}
+          patient={{
+            pseudonym: patient.pseudonym,
+            age: patient.age,
+            gender: patient.gender === 'female' || patient.gender === 'male' ? patient.gender : 'unspecified',
+          }}
+          startConfirmingDelete={deleteConfirmRequested}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false);
+            void load();
+          }}
+          onDeleted={() => navigate('/specialist/patients', { state: { notice: 'Пациент удалён' } })}
+        />
+      )}
     </div>
   );
 }

@@ -87,6 +87,7 @@ export interface PatientListItemDto {
   balance: number;
   selectedSkin: string;
   createdAt: string;
+  archivedAt?: string | null;
   assignment: {
     sessionsPerWeek: number;
     targetBreaths: number;
@@ -207,9 +208,16 @@ export interface PatientsQuery {
   direction?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
+  includeArchived?: boolean;
 }
 
 export interface CreatePatientInput {
+  pseudonym: string;
+  age: number;
+  gender: 'male' | 'female' | 'unspecified';
+}
+
+export interface UpdatePatientInput {
   pseudonym: string;
   age: number;
   gender: 'male' | 'female' | 'unspecified';

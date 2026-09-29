@@ -385,6 +385,19 @@ const MIGRATIONS: Migration[] = [
       ).run('Анна Викторовна', 'Детский пульмонологический центр');
     },
   },
+  {
+    version: 3,
+    name: '003_patient_archiving',
+    up: (db: DatabaseSync) => {
+      const columns = (db.prepare('PRAGMA table_info(patients)').all() as Array<{ name: string }>).map(
+        (column) => column.name,
+      );
+      if (!columns.includes('archived_at')) {
+        db.exec('ALTER TABLE patients ADD COLUMN archived_at TEXT;');
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_patients_archived_at ON patients(archived_at);');
+    },
+  },
 ];
 
 export function runMigrations(db: DatabaseSync): void {
