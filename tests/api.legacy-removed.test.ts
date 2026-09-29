@@ -26,7 +26,22 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  rmSync(directory, { recursive: true, force: true });
+
+  try {
+    const dbModule = await import('../server/db.ts');
+    const closeFn =
+      (dbModule as { closeDatabase?: () => void }).closeDatabase ??
+      (dbModule as { closeDb?: () => void }).closeDb;
+    if (typeof closeFn === 'function') closeFn();
+  } catch {
+    // модуль БД мог не загрузиться — ничего не делаем
+  }
+
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch {
+    // Windows может держать файл — не роняем тест из-за уборки
+  }
 });
 
 describe('Старые маршруты кабинета удалены', () => {
