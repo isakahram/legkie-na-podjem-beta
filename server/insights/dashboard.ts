@@ -1,4 +1,4 @@
-import { isAfter, parseISO, startOfWeek, subDays, subWeeks } from 'date-fns';
+import { isAfter, parseISO } from 'date-fns';
 import type {
   AttentionThresholds,
   DashboardAttentionItem,
@@ -37,9 +37,26 @@ export function parsePeriod(raw: unknown): DashboardPeriod {
   return raw === 'week' || raw === 'month' || raw === '8weeks' ? raw : 'week';
 }
 
-/** Начало периода: понедельник недели, с которой начинается отсчёт. */
+/** Сдвиг даты на N календарных дней назад в UTC. */
+const subDaysUtc = (date: Date, days: number): Date =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - days));
+
+/** Начало периода: понедельник недели, с которой начинается отсчёт. UTC. */
 export function periodStart(period: DashboardPeriod, now: Date): Date {
-  return startOfWeek(subWeeks(now, PERIOD_WEEKS[period] - 1), { weekStartsOn: 1 });
+  const weeks = PERIOD_WEEKS[period] - 1;
+  const shiftedUtcMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - weeks * 7,
+  );
+  const shifted = new Date(shiftedUtcMs);
+  const isoDay = shifted.getUTCDay() === 0 ? 7 : shifted.getUTCDay();
+  const mondayUtcMs = Date.UTC(
+    shifted.getUTCFullYear(),
+    shifted.getUTCMonth(),
+    shifted.getUTCDate() - (isoDay - 1),
+  );
+  return new Date(mondayUtcMs);
 }
 
 const isCountable = (session: SessionRecord): boolean =>
@@ -66,7 +83,7 @@ export function buildDashboard(
   const recentLimit = options.recentLimit ?? 8;
 
   const from = periodStart(period, now);
-  const activeFrom = subDays(now, ACTIVE_WINDOW_DAYS);
+  const activeFrom = subDaysUtc(now, ACTIVE_WINDOW_DAYS);
   const weeksInPeriod = PERIOD_WEEKS[period];
 
   let sessionsInPeriod = 0;
@@ -118,7 +135,6 @@ export function buildDashboard(
     }
   }
 
-  // Общая динамика за 8 недель: складываем недельные точки всех пациентов.
   const series: DashboardSeriesPoint[] = [];
   const weekCount = patients[0]?.weekly.length ?? 8;
   for (let index = 0; index < weekCount; index += 1) {
@@ -138,7 +154,8 @@ export function buildDashboard(
   attention.sort(
     (a, b) =>
       criticalFirst(a) - criticalFirst(b) ||
-      (b.daysSinceLastSession ?? Number.MAX_SAFE_INTEGER) - (a.daysSinceLastSession ?? Number.MAX_SAFE_INTEGER),
+      (b.daysSinceLastSession ?? Number.MAX_SAFE_INTEGER) -
+        (a.daysSinceLastSession ?? Number.MAX_SAFE_INTEGER),
   );
 
   recentPool.sort((a, b) => parseISO(b.startedAt).getTime() - parseISO(a.startedAt).getTime());
