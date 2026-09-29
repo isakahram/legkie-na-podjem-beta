@@ -25,12 +25,12 @@ export interface PatientView extends DashboardPatientInput {
 export function buildPatientViews(
   database: AppDatabase,
   userId: string,
-  options: { thresholds?: AttentionThresholds; now?: Date } = {},
+  options: { thresholds?: AttentionThresholds; now?: Date; includeArchived?: boolean } = {},
 ): PatientView[] {
   const now = options.now ?? new Date();
   const thresholds = options.thresholds ?? resolveThresholds(database.getSpecialistSettings(userId).notifications);
 
-  return database.listPatientsForUser(userId).map((patient) => {
+  return database.listPatientsForUser(userId, { includeArchived: options.includeArchived }).map((patient) => {
     const sessions: SessionRecord[] = database.listSessions(patient.id);
     const analytics = calculatePatientAnalytics(
       sessions,

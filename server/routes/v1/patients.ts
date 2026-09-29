@@ -26,6 +26,12 @@ const createPatientSchema = z.object({
   gender: z.enum(['male', 'female', 'unspecified']).default('unspecified'),
 });
 
+const updatePatientSchema = z.object({
+  pseudonym: z.string().trim().min(1, 'Укажите псевдоним').max(50),
+  age: z.number().int().min(5).max(12),
+  gender: z.enum(['male', 'female', 'unspecified']),
+});
+
 const listQuerySchema = z.object({
   search: z.string().trim().max(60).optional(),
   filter: z.enum(['all', 'active', 'missed', 'declining', 'attention']).optional(),
@@ -33,6 +39,7 @@ const listQuerySchema = z.object({
   direction: z.enum(['asc', 'desc']).optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(500).optional(),
+  includeArchived: z.enum(['true', 'false']).optional(),
 });
 
 /** Пороги «Требуют внимания» из настроек уведомлений специалиста. */
@@ -48,17 +55,38 @@ export function createPatientsRouter(): Router {
   router.get('/patients', requireAuth, (req: AuthContextRequest, res: Response) => {
     const database = getDatabase(req);
     const query = listQuerySchema.parse(req.query);
-    const views = buildPatientViews(database, req.user!.id, { thresholds: thresholdsFor(req) });
+    const includeArchived = query.includeArchived === 'true';
+
+    if (includeArchived && req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'Архив пациентов доступен только администратору' });
+      return;
+    }
+
+    const views = buildPatientViews(database, req.user!.id, {
+      thresholds: thresholdsFor(req),
+      includeArchived,
+    });
     const result = queryPatients(
       views.map((view) => view.item),
-      query,
+      {
+        search: query.search,
+        filter: query.filter,
+        sort: query.sort,
+        direction: query.direction,
+        page: query.page,
+        pageSize: query.pageSize,
+      },
     );
 
     database.logAuditEvent({
       userId: req.user!.id,
       action: 'list_patients',
       resourceType: 'patient',
-      details: JSON.stringify({ count: result.total, filter: query.filter ?? 'all' }),
+      details: JSON.stringify({
+        count: result.total,
+        filter: query.filter ?? 'all',
+        includeArchived,
+      }),
       ip: getClientIp(req),
     });
 
@@ -94,6 +122,63 @@ export function createPatientsRouter(): Router {
 
     res.status(201).json({ id: created.id, code: created.code });
   });
+
+  // PATCH /api/v1/patients/:id — редактирование профиля пациента
+  router.patch(
+    '/patients/:id',
+    requireAuth,
+    requirePatientAccess,
+    requireMutationAllowed,
+    (req: AuthContextRequest, res: Response) => {
+      const database = getDatabase(req);
+      const patientId = routeParam(req, 'id');
+      const payload = updatePatientSchema.parse(req.body);
+      const updated = database.updatePatientProfile(patientId, payload);
+
+      if (!updated) {
+        res.status(404).json({ error: 'Пациент не найден' });
+        return;
+      }
+
+      database.logAuditEvent({
+        userId: req.user!.id,
+        action: 'patient.updated',
+        resourceType: 'patient',
+        resourceId: patientId,
+        details: JSON.stringify({ age: payload.age, gender: payload.gender }),
+        ip: getClientIp(req),
+      });
+      res.json({ ok: true });
+    },
+  );
+
+  // DELETE /api/v1/patients/:id — мягкое удаление (архивация) пациента
+  router.delete(
+    '/patients/:id',
+    requireAuth,
+    requirePatientAccess,
+    requireMutationAllowed,
+    (req: AuthContextRequest, res: Response) => {
+      const database = getDatabase(req);
+      const patientId = routeParam(req, 'id');
+      const archived = database.archivePatient(patientId);
+
+      if (!archived) {
+        res.status(404).json({ error: 'Пациент не найден' });
+        return;
+      }
+
+      database.logAuditEvent({
+        userId: req.user!.id,
+        action: 'patient.archived',
+        resourceType: 'patient',
+        resourceId: patientId,
+        details: 'soft_delete',
+        ip: getClientIp(req),
+      });
+      res.json({ ok: true });
+    },
+  );
 
   // GET /api/v1/patients/:id — карточка ребёнка
   router.get(
